@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**lancast** is a native C++ desktop application for streaming screen and audio over LAN networks. It uses manual IP entry (no auto-discovery). Linux (X11) is the primary platform, with Windows and macOS planned later. The full specification lives in `lancast-plan.md`.
+**lancast** is a native C++ desktop application for streaming screen and audio over LAN networks. Manual IP entry (no auto-discovery). Linux (X11) is the primary platform; Windows and macOS are planned later. The full specification lives in `lancast-plan.md`.
 
 ## Build & Run
 
@@ -12,15 +12,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies (Linux)
 apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libx11-dev libxext-dev libpulse-dev
 
-# Build
+# Configure and build
 cmake -B build && cmake --build build
 
 # Run
-./lancast --host                    # Start as server on port 7878
-./lancast --client 192.168.x.x     # Connect to host
+./build/lancast --host                    # Start as server on port 7878
+./build/lancast --client 192.168.x.x     # Connect to host
 
-# Tests (GoogleTest)
+# Run all tests
 ctest --test-dir build
+
+# Run a single test by name
+ctest --test-dir build -R test_ring_buffer
+
+# Build with verbose output (useful for debugging compile errors)
+cmake --build build --verbose
 ```
 
 SDL3 and GoogleTest 1.14+ are fetched via CMake FetchContent. Requires CMake 3.21+ and C++20.
@@ -46,7 +52,7 @@ UDP recv -> PacketAssembler -> [queue] -> VideoDecoder -> [queue] -> SDL3 Render
 - **`capture/`** — `ICaptureSource` interface with platform backends. X11 XShm captures BGRA32 via shared memory, converted to YUV420p via `sws_scale`. PulseAudio monitor captures system audio at 48kHz stereo float32
 - **`encode/`** — FFmpeg libx264 (`ultrafast`/`zerolatency`, 4-8 Mbps CBR, GOP 60, no B-frames, 4 threads) and libopus encoder
 - **`decode/`** — FFmpeg H.264 and Opus decoders
-- **`net/`** — Custom 16-byte UDP packet header protocol. Packet fragmenter splits frames into <=1184 byte chunks. Keyframes are NACK-reliable; P-frames and audio are best-effort. Connection: HELLO -> WELCOME (with SPS/PPS) -> IDR keyframe
+- **`net/`** — Custom 16-byte UDP packet header protocol. Packet fragmenter splits frames into <=1184 byte chunks. Keyframes are NACK-reliable; P-frames and audio are best-effort. Connection flow: HELLO -> WELCOME (with SPS/PPS) -> IDR keyframe
 - **`render/`** — SDL3 YUV420p texture streaming and SDL3 audio playback
 - **`sync/`** — Audio-master A/V synchronization
 - **`app/`** — `HostSession` and `ClientSession` orchestrators, SDL3 UI (host/join dialog)
@@ -54,13 +60,13 @@ UDP recv -> PacketAssembler -> [queue] -> VideoDecoder -> [queue] -> SDL3 Render
 ### Design Patterns
 
 - RAII wrappers with custom deleters for FFmpeg types (AVCodecContext, AVFrame, AVPacket)
-- Lock-free SPSC ring buffer for the capture->encode hot path
+- Lock-free SPSC ring buffer for the capture->encode hot path; mutex+condvar MPSC queues elsewhere
 - `ICaptureSource` abstract interface + platform factory for compile-time backend selection
 - C++20: `std::jthread`, `std::atomic`, structured bindings
 
 ## Implementation Phases
 
-The project follows 7 phases defined in `lancast-plan.md`. Phases 1-5 are Linux, Phase 6 is Windows, Phase 7 is macOS. Each phase builds on the previous — start with Phase 1 (CMake + core types + UDP protocol + fragmenter/assembler + tests) and work sequentially.
+The project follows 7 phases defined in `lancast-plan.md`. Phases 1-5 are Linux, Phase 6 is Windows, Phase 7 is macOS. Each phase builds on the previous — start with Phase 1 (CMake + core types + UDP protocol + fragmenter/assembler + tests) and work sequentially. Check `lancast-plan.md` for detailed per-phase deliverables.
 
 ## Performance Target
 

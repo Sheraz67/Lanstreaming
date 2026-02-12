@@ -1,0 +1,11 @@
+add_executable(test_ring_buffer test_ring_buffer.cpp)
+target_link_libraries(test_ring_buffer PRIVATE lancast_core GTest::gtest_main)
+add_test(NAME test_ring_buffer COMMAND test_ring_buffer)
+
+add_executable(test_protocol test_protocol.cpp)
+target_link_libraries(test_protocol PRIVATE lancast_net GTest::gtest_main)
+add_test(NAME test_protocol COMMAND test_protocol)
+
+add_executable(test_packet_roundtrip test_packet_roundtrip.cpp)
+target_link_libraries(test_packet_roundtrip PRIVATE lancast_net GTest::gtest_main)
+add_test(NAME test_packet_roundtrip COMMAND test_packet_roundtrip)
