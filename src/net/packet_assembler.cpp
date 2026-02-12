@@ -62,6 +62,36 @@ std::optional<EncodedPacket> PacketAssembler::feed(const Packet& packet) {
     return result;
 }
 
+std::vector<IncompleteKeyframe> PacketAssembler::check_incomplete_keyframes(int64_t age_ms) {
+    std::vector<IncompleteKeyframe> result;
+    auto now = std::chrono::steady_clock::now();
+    auto threshold = std::chrono::milliseconds(age_ms);
+
+    for (auto& [key, state] : pending_) {
+        // Only check video keyframes
+        if (!(state.flags & FLAG_KEYFRAME)) continue;
+        if (state.nack_sent) continue;
+        if (now - state.created < threshold) continue;
+
+        IncompleteKeyframe kf;
+        kf.frame_id = state.frame_id;
+        kf.frag_total = state.frag_total;
+
+        for (uint16_t i = 0; i < state.frag_total; ++i) {
+            if (state.fragments[i].empty()) {
+                kf.missing_indices.push_back(i);
+            }
+        }
+
+        if (!kf.missing_indices.empty()) {
+            state.nack_sent = true;
+            result.push_back(std::move(kf));
+        }
+    }
+
+    return result;
+}
+
 void PacketAssembler::purge_stale(int64_t timeout_ms) {
     auto now = std::chrono::steady_clock::now();
     auto timeout = std::chrono::milliseconds(timeout_ms);

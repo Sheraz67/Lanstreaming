@@ -8,6 +8,7 @@
 #include <mutex>
 #include <atomic>
 #include <functional>
+#include <chrono>
 
 namespace lancast {
 
@@ -34,21 +35,46 @@ public:
     bool is_running() const { return running_.load(); }
     size_t client_count() const;
 
+    // RTT measurement (max across all clients with valid RTT)
+    double max_rtt_ms() const;
+
 private:
+    struct ClientInfo {
+        Endpoint endpoint;
+        double rtt_ms = 0.0;
+        bool rtt_valid = false;
+    };
+
+    struct KeyframeCache {
+        uint16_t frame_id = 0;
+        std::vector<Packet> fragments;
+    };
+
     void handle_hello(const Packet& pkt, const Endpoint& source);
+    void handle_pong(const Packet& pkt, const Endpoint& source);
+    void handle_nack(const Packet& pkt, const Endpoint& source);
     void send_stream_config(const Endpoint& dest);
+    void send_pings();
 
     uint16_t port_;
     UdpSocket socket_;
     PacketFragmenter fragmenter_;
     uint16_t sequence_ = 0;
 
-    std::mutex clients_mutex_;
-    std::vector<Endpoint> clients_;
+    mutable std::mutex clients_mutex_;
+    std::vector<ClientInfo> clients_;
 
     std::atomic<bool> running_{false};
     StreamConfig config_;
     std::function<void()> keyframe_cb_;
+
+    // Keyframe NACK retransmission cache
+    std::mutex keyframe_mutex_;
+    KeyframeCache last_keyframe_;
+
+    // PING/PONG timing
+    static constexpr auto PING_INTERVAL = std::chrono::seconds(2);
+    std::chrono::steady_clock::time_point last_ping_time_;
 };
 
 } // namespace lancast

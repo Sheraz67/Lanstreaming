@@ -21,3 +21,7 @@ add_test(NAME test_video_codec COMMAND test_video_codec)
 add_executable(test_audio_codec test_audio_codec.cpp)
 target_link_libraries(test_audio_codec PRIVATE lancast_encode lancast_decode GTest::gtest_main)
 add_test(NAME test_audio_codec COMMAND test_audio_codec)
+
+add_executable(test_phase5_protocol test_phase5_protocol.cpp)
+target_link_libraries(test_phase5_protocol PRIVATE lancast_net GTest::gtest_main)
+add_test(NAME test_phase5_protocol COMMAND test_phase5_protocol)

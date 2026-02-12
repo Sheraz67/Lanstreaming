@@ -94,12 +94,23 @@ bool SdlRenderer::poll_events() {
                 if (event.key.key == SDLK_ESCAPE) {
                     return false;
                 }
+                if (event.key.key == SDLK_F11) {
+                    toggle_fullscreen();
+                }
                 break;
             default:
                 break;
         }
     }
     return true;
+}
+
+void SdlRenderer::toggle_fullscreen() {
+    if (!initialized_ || !window_) return;
+
+    fullscreen_ = !fullscreen_;
+    SDL_SetWindowFullscreen(window_, fullscreen_);
+    LOG_INFO(TAG, "Fullscreen %s", fullscreen_ ? "enabled" : "disabled");
 }
 
 void SdlRenderer::shutdown() {

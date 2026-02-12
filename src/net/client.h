@@ -10,6 +10,12 @@
 
 namespace lancast {
 
+enum class ConnectionState : uint8_t {
+    Disconnected = 0,
+    Connecting   = 1,
+    Connected    = 2,
+};
+
 class Client {
 public:
     Client();
@@ -25,15 +31,19 @@ public:
 
     void request_keyframe();
 
-    bool is_connected() const { return connected_.load(); }
+    bool is_connected() const { return state_.load() == ConnectionState::Connected; }
+    ConnectionState state() const { return state_.load(); }
     const StreamConfig& stream_config() const { return config_; }
 
 private:
+    void send_nack(uint16_t frame_id, const std::vector<uint16_t>& missing);
+    void handle_ping(const Packet& pkt);
+
     UdpSocket socket_;
     PacketAssembler assembler_;
     Endpoint server_;
     StreamConfig config_;
-    std::atomic<bool> connected_{false};
+    std::atomic<ConnectionState> state_{ConnectionState::Disconnected};
 };
 
 } // namespace lancast

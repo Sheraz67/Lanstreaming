@@ -11,13 +11,16 @@ HostSession::~HostSession() {
     stop();
 }
 
-bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate, std::atomic<bool>& running) {
+bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
+                         uint32_t width, uint32_t height, std::atomic<bool>& running) {
     running_ = &running;
     fps_ = fps;
+    target_bitrate_ = bitrate;
+    current_bitrate_ = bitrate;
 
     // Initialize screen capture
     capture_ = std::make_unique<ScreenCaptureX11>();
-    if (!capture_->init(1920, 1080)) {
+    if (!capture_->init(width, height)) {
         LOG_ERROR(TAG, "Failed to initialize screen capture");
         return false;
     }
@@ -77,6 +80,8 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate, std::atom
 
     LOG_INFO(TAG, "Host started: %ux%u @ %u fps, bitrate %u, port %u, audio %s",
              w, h, fps, bitrate, port, audio_capture_ ? "enabled" : "disabled");
+
+    last_bitrate_check_ = std::chrono::steady_clock::now();
 
     // Launch threads
     poll_thread_ = std::jthread([this](std::stop_token st) { server_poll_loop(st); });
@@ -205,9 +210,40 @@ void HostSession::server_poll_loop(std::stop_token st) {
 
     while (!st.stop_requested() && running_->load()) {
         server_->poll();
+
+        // Periodically check adaptive bitrate
+        check_adaptive_bitrate();
     }
 
     LOG_INFO(TAG, "Server poll loop ended");
+}
+
+void HostSession::check_adaptive_bitrate() {
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_bitrate_check_ < std::chrono::seconds(5)) return;
+    last_bitrate_check_ = now;
+
+    if (server_->client_count() == 0) return;
+
+    double rtt = server_->max_rtt_ms();
+    if (rtt <= 0) return; // No valid RTT measurements yet
+
+    uint32_t desired_bitrate;
+    if (rtt > 100.0) {
+        desired_bitrate = target_bitrate_ / 2;
+    } else if (rtt > 50.0) {
+        desired_bitrate = target_bitrate_ * 3 / 4;
+    } else {
+        desired_bitrate = target_bitrate_;
+    }
+
+    if (desired_bitrate != current_bitrate_) {
+        LOG_INFO(TAG, "Adaptive bitrate: RTT=%.1f ms, adjusting %u -> %u",
+                 rtt, current_bitrate_, desired_bitrate);
+        if (encoder_->set_bitrate(desired_bitrate)) {
+            current_bitrate_ = desired_bitrate;
+        }
+    }
 }
 
 void HostSession::audio_capture_loop(std::stop_token st) {

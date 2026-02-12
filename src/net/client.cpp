@@ -14,6 +14,8 @@ bool Client::connect(const std::string& host_ip, uint16_t port) {
         return false;
     }
 
+    state_ = ConnectionState::Connecting;
+
     // Bind to any available port
     socket_.set_recv_timeout(1000);
     socket_.set_recv_buffer(2 * 1024 * 1024);
@@ -35,6 +37,7 @@ bool Client::connect(const std::string& host_ip, uint16_t port) {
     auto result = socket_.recv_from();
     if (!result) {
         LOG_ERROR(TAG, "No WELCOME received (timeout)");
+        state_ = ConnectionState::Disconnected;
         return false;
     }
 
@@ -42,6 +45,7 @@ bool Client::connect(const std::string& host_ip, uint16_t port) {
     if (!pkt.header.is_valid() ||
         static_cast<PacketType>(pkt.header.type) != PacketType::WELCOME) {
         LOG_ERROR(TAG, "Expected WELCOME, got type 0x%02x", pkt.header.type);
+        state_ = ConnectionState::Disconnected;
         return false;
     }
 
@@ -69,14 +73,14 @@ bool Client::connect(const std::string& host_ip, uint16_t port) {
 
     // Switch to shorter timeout for streaming
     socket_.set_recv_timeout(50);
-    connected_ = true;
+    state_ = ConnectionState::Connected;
     LOG_INFO(TAG, "Connected to %s:%u (%ux%u@%u)", host_ip.c_str(), port,
              config_.width, config_.height, config_.fps);
     return true;
 }
 
 void Client::disconnect() {
-    if (!connected_) return;
+    if (state_.load() == ConnectionState::Disconnected) return;
 
     Packet bye;
     bye.header.magic = PROTOCOL_MAGIC;
@@ -86,7 +90,7 @@ void Client::disconnect() {
     auto data = bye.serialize();
     socket_.send_to(data, server_);
 
-    connected_ = false;
+    state_ = ConnectionState::Disconnected;
     LOG_INFO(TAG, "Disconnected");
 }
 
@@ -109,6 +113,14 @@ void Client::poll(ThreadSafeQueue<EncodedPacket>& video_queue,
                 video_queue.push(std::move(*frame));
             }
         }
+    } else if (type == PacketType::PING) {
+        handle_ping(pkt);
+    }
+
+    // Check for incomplete keyframes and send NACKs
+    auto incomplete = assembler_.check_incomplete_keyframes(100);
+    for (const auto& kf : incomplete) {
+        send_nack(kf.frame_id, kf.missing_indices);
     }
 
     // Periodically purge stale incomplete frames
@@ -123,6 +135,44 @@ void Client::request_keyframe() {
 
     auto data = req.serialize();
     socket_.send_to(data, server_);
+}
+
+void Client::handle_ping(const Packet& pkt) {
+    // Echo back as PONG with same payload
+    Packet pong;
+    pong.header.magic = PROTOCOL_MAGIC;
+    pong.header.version = PROTOCOL_VERSION;
+    pong.header.type = static_cast<uint8_t>(PacketType::PONG);
+    pong.header.sequence = pkt.header.sequence;
+    pong.payload = pkt.payload;
+
+    auto data = pong.serialize();
+    socket_.send_to(data, server_);
+}
+
+void Client::send_nack(uint16_t frame_id, const std::vector<uint16_t>& missing) {
+    if (missing.empty()) return;
+
+    Packet nack;
+    nack.header.magic = PROTOCOL_MAGIC;
+    nack.header.version = PROTOCOL_VERSION;
+    nack.header.type = static_cast<uint8_t>(PacketType::NACK);
+    nack.header.frame_id = frame_id;
+
+    NackPayload np;
+    np.frame_id = frame_id;
+    np.num_missing = static_cast<uint16_t>(missing.size());
+
+    nack.payload.resize(sizeof(NackPayload) + missing.size() * sizeof(uint16_t));
+    std::memcpy(nack.payload.data(), &np, sizeof(NackPayload));
+    std::memcpy(nack.payload.data() + sizeof(NackPayload),
+                missing.data(), missing.size() * sizeof(uint16_t));
+
+    auto data = nack.serialize();
+    socket_.send_to(data, server_);
+
+    LOG_INFO(TAG, "Sent NACK for keyframe %u (%zu missing fragments)",
+             frame_id, missing.size());
 }
 
 } // namespace lancast

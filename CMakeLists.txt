@@ -113,6 +113,7 @@ target_link_libraries(lancast_decode PUBLIC lancast_core FFmpeg::avcodec FFmpeg:
 add_library(lancast_app STATIC
     src/app/host_session.cpp
     src/app/client_session.cpp
+    src/app/launcher_ui.cpp
 )
 target_include_directories(lancast_app PUBLIC src)
 target_link_libraries(lancast_app PUBLIC lancast_net lancast_capture lancast_audio_capture lancast_render lancast_audio_render lancast_encode lancast_decode)

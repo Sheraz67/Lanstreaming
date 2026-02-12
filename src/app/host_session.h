@@ -19,7 +19,8 @@ public:
     HostSession() = default;
     ~HostSession();
 
-    bool start(uint16_t port, uint32_t fps, uint32_t bitrate, std::atomic<bool>& running);
+    bool start(uint16_t port, uint32_t fps, uint32_t bitrate,
+               uint32_t width, uint32_t height, std::atomic<bool>& running);
     void stop();
     bool is_running() const { return running_ != nullptr && running_->load(); }
 
@@ -30,6 +31,8 @@ private:
     void server_poll_loop(std::stop_token st);
     void audio_capture_loop(std::stop_token st);
     void audio_encode_loop(std::stop_token st);
+
+    void check_adaptive_bitrate();
 
     std::unique_ptr<ICaptureSource> capture_;
     std::unique_ptr<VideoEncoder> encoder_;
@@ -45,6 +48,8 @@ private:
 
     std::atomic<bool>* running_ = nullptr;
     uint32_t fps_ = 30;
+    uint32_t target_bitrate_ = 6000000;
+    uint32_t current_bitrate_ = 6000000;
 
     std::jthread capture_thread_;
     std::jthread encode_thread_;
@@ -52,6 +57,9 @@ private:
     std::jthread poll_thread_;
     std::jthread audio_capture_thread_;
     std::jthread audio_encode_thread_;
+
+    // Adaptive bitrate timing
+    std::chrono::steady_clock::time_point last_bitrate_check_;
 };
 
 } // namespace lancast

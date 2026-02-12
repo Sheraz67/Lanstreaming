@@ -20,6 +20,7 @@ public:
 
     // Returns false if user requested quit (close window or ESC)
     bool poll_events();
+    void toggle_fullscreen();
 
     void shutdown();
 
@@ -30,6 +31,7 @@ private:
     uint32_t width_ = 0;
     uint32_t height_ = 0;
     bool initialized_ = false;
+    bool fullscreen_ = false;
 };
 
 } // namespace lancast

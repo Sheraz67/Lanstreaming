@@ -82,6 +82,20 @@ struct WelcomePayload {
     uint16_t audio_channels = 0;
 };
 
+#pragma pack(push, 1)
+struct PingPayload {
+    uint64_t timestamp_us = 0; // Sender's monotonic timestamp
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct NackPayload {
+    uint16_t frame_id = 0;
+    uint16_t num_missing = 0;
+    // Followed by num_missing * uint16_t missing fragment indices
+};
+#pragma pack(pop)
+
 // A complete UDP packet (header + payload data)
 struct Packet {
     PacketHeader header;

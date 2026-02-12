@@ -16,9 +16,6 @@ ScreenCaptureX11::~ScreenCaptureX11() {
 }
 
 bool ScreenCaptureX11::init(uint32_t target_width, uint32_t target_height) {
-    target_width_ = target_width;
-    target_height_ = target_height;
-
     // Open X display
     display_ = XOpenDisplay(nullptr);
     if (!display_) {
@@ -34,6 +31,10 @@ bool ScreenCaptureX11::init(uint32_t target_width, uint32_t target_height) {
     XGetWindowAttributes(display_, root_, &attrs);
     screen_width_ = static_cast<uint32_t>(attrs.width);
     screen_height_ = static_cast<uint32_t>(attrs.height);
+
+    // If target is 0, use native screen resolution
+    target_width_ = (target_width > 0) ? target_width : screen_width_;
+    target_height_ = (target_height > 0) ? target_height : screen_height_;
 
     LOG_INFO(TAG, "Screen size: %ux%u, target: %ux%u",
              screen_width_, screen_height_, target_width_, target_height_);

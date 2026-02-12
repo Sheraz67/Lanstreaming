@@ -20,6 +20,8 @@ VideoEncoder::~VideoEncoder() {
 bool VideoEncoder::init(uint32_t width, uint32_t height, uint32_t fps, uint32_t bitrate) {
     width_ = width;
     height_ = height;
+    fps_ = fps;
+    bitrate_ = bitrate;
 
     const AVCodec* codec = avcodec_find_encoder_by_name("libx264");
     if (!codec) {
@@ -166,6 +168,21 @@ std::optional<EncodedPacket> VideoEncoder::encode(const RawVideoFrame& frame) {
 void VideoEncoder::request_keyframe() {
     force_keyframe_.store(true);
     LOG_DEBUG(TAG, "Keyframe requested");
+}
+
+bool VideoEncoder::set_bitrate(uint32_t bitrate) {
+    if (bitrate == bitrate_) return true;
+    if (!initialized_) return false;
+
+    uint32_t w = width_, h = height_, fps = fps_;
+    LOG_INFO(TAG, "Changing bitrate: %u -> %u", bitrate_, bitrate);
+
+    shutdown();
+    bool ok = init(w, h, fps, bitrate);
+    if (ok) {
+        request_keyframe();
+    }
+    return ok;
 }
 
 void VideoEncoder::shutdown() {
