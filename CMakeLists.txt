@@ -24,6 +24,7 @@ FetchContent_Declare(
 )
 set(SDL_TESTS OFF CACHE BOOL "" FORCE)
 set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL3)
 
 # --- GoogleTest via FetchContent ---
@@ -34,6 +35,7 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # --- Core library (header-only + logger) ---
@@ -121,6 +123,9 @@ target_link_libraries(lancast_app PUBLIC lancast_net lancast_capture lancast_aud
 # --- Main executable ---
 add_executable(lancast src/main.cpp)
 target_link_libraries(lancast PRIVATE lancast_app)
+
+# --- Install rules ---
+install(TARGETS lancast DESTINATION bin)
 
 # --- Tests ---
 enable_testing()

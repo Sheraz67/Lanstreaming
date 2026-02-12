@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Lancast
+Comment=Stream screen and audio over LAN
+Exec=lancast
+Icon=lancast
+Categories=AudioVideo;Network;
+Terminal=false
