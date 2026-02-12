@@ -2,7 +2,9 @@
 
 #include "net/client.h"
 #include "decode/video_decoder.h"
+#include "decode/audio_decoder.h"
 #include "render/sdl_renderer.h"
+#include "render/audio_player.h"
 #include "core/thread_safe_queue.h"
 #include "core/types.h"
 #include <atomic>
@@ -27,9 +29,12 @@ public:
 private:
     void recv_loop(std::stop_token st);
     void decode_loop(std::stop_token st);
+    void audio_decode_loop(std::stop_token st);
 
     Client client_;
     std::unique_ptr<VideoDecoder> decoder_;
+    std::unique_ptr<AudioDecoder> audio_decoder_;
+    std::unique_ptr<AudioPlayer> audio_player_;
     SdlRenderer renderer_;
 
     ThreadSafeQueue<EncodedPacket> video_queue_{30};
@@ -39,6 +44,7 @@ private:
     std::atomic<bool>* running_ = nullptr;
     std::jthread recv_thread_;
     std::jthread decode_thread_;
+    std::jthread audio_decode_thread_;
 };
 
 } // namespace lancast

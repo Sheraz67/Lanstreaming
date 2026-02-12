@@ -68,6 +68,17 @@ target_link_libraries(lancast_capture PUBLIC
     FFmpeg::avutil
 )
 
+# --- Audio Capture library ---
+add_library(lancast_audio_capture STATIC
+    src/capture/audio_capture_pulse.cpp
+)
+target_include_directories(lancast_audio_capture PUBLIC src ${PULSEAUDIO_INCLUDE_DIRS} ${PULSEAUDIO_SIMPLE_INCLUDE_DIRS})
+target_link_libraries(lancast_audio_capture PUBLIC
+    lancast_core
+    ${PULSEAUDIO_LIBRARIES}
+    ${PULSEAUDIO_SIMPLE_LIBRARIES}
+)
+
 # --- Render library ---
 add_library(lancast_render STATIC
     src/render/sdl_renderer.cpp
@@ -75,19 +86,28 @@ add_library(lancast_render STATIC
 target_include_directories(lancast_render PUBLIC src)
 target_link_libraries(lancast_render PUBLIC lancast_core SDL3::SDL3)
 
+# --- Audio Render library ---
+add_library(lancast_audio_render STATIC
+    src/render/audio_player.cpp
+)
+target_include_directories(lancast_audio_render PUBLIC src)
+target_link_libraries(lancast_audio_render PUBLIC lancast_core SDL3::SDL3)
+
 # --- Encode library ---
 add_library(lancast_encode STATIC
     src/encode/video_encoder.cpp
+    src/encode/audio_encoder.cpp
 )
 target_include_directories(lancast_encode PUBLIC src)
-target_link_libraries(lancast_encode PUBLIC lancast_core FFmpeg::avcodec FFmpeg::avutil)
+target_link_libraries(lancast_encode PUBLIC lancast_core FFmpeg::avcodec FFmpeg::avutil FFmpeg::swresample)
 
 # --- Decode library ---
 add_library(lancast_decode STATIC
     src/decode/video_decoder.cpp
+    src/decode/audio_decoder.cpp
 )
 target_include_directories(lancast_decode PUBLIC src)
-target_link_libraries(lancast_decode PUBLIC lancast_core FFmpeg::avcodec FFmpeg::avutil)
+target_link_libraries(lancast_decode PUBLIC lancast_core FFmpeg::avcodec FFmpeg::avutil FFmpeg::swresample)
 
 # --- App library (session orchestrators) ---
 add_library(lancast_app STATIC
@@ -95,7 +115,7 @@ add_library(lancast_app STATIC
     src/app/client_session.cpp
 )
 target_include_directories(lancast_app PUBLIC src)
-target_link_libraries(lancast_app PUBLIC lancast_net lancast_capture lancast_render lancast_encode lancast_decode)
+target_link_libraries(lancast_app PUBLIC lancast_net lancast_capture lancast_audio_capture lancast_render lancast_audio_render lancast_encode lancast_decode)
 
 # --- Main executable ---
 add_executable(lancast src/main.cpp)

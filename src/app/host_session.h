@@ -1,9 +1,12 @@
 #pragma once
 
 #include "capture/capture_source.h"
+#include "capture/audio_capture_pulse.h"
 #include "encode/video_encoder.h"
+#include "encode/audio_encoder.h"
 #include "net/server.h"
 #include "core/ring_buffer.h"
+#include "core/thread_safe_queue.h"
 #include "core/types.h"
 #include <atomic>
 #include <memory>
@@ -25,13 +28,20 @@ private:
     void encode_loop(std::stop_token st);
     void network_send_loop(std::stop_token st);
     void server_poll_loop(std::stop_token st);
+    void audio_capture_loop(std::stop_token st);
+    void audio_encode_loop(std::stop_token st);
 
     std::unique_ptr<ICaptureSource> capture_;
     std::unique_ptr<VideoEncoder> encoder_;
+    std::unique_ptr<AudioCapturePulse> audio_capture_;
+    std::unique_ptr<AudioEncoder> audio_encoder_;
     std::unique_ptr<Server> server_;
 
     RingBuffer<RawVideoFrame, 4> raw_buffer_;       // capture -> encode
     RingBuffer<EncodedPacket, 4> encoded_buffer_;    // encode -> send
+
+    ThreadSafeQueue<RawAudioFrame> audio_raw_queue_{8};       // audio capture -> encode
+    ThreadSafeQueue<EncodedPacket> audio_encoded_queue_{16};   // audio encode -> send
 
     std::atomic<bool>* running_ = nullptr;
     uint32_t fps_ = 30;
@@ -40,6 +50,8 @@ private:
     std::jthread encode_thread_;
     std::jthread send_thread_;
     std::jthread poll_thread_;
+    std::jthread audio_capture_thread_;
+    std::jthread audio_encode_thread_;
 };
 
 } // namespace lancast

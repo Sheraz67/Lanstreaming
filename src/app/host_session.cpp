@@ -33,6 +33,24 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate, std::atom
         return false;
     }
 
+    // Initialize audio capture
+    audio_capture_ = std::make_unique<AudioCapturePulse>();
+    if (!audio_capture_->init(48000, 2)) {
+        LOG_WARN(TAG, "Failed to initialize audio capture — continuing without audio");
+        audio_capture_.reset();
+    }
+
+    // Initialize audio encoder
+    if (audio_capture_) {
+        audio_encoder_ = std::make_unique<AudioEncoder>();
+        if (!audio_encoder_->init(48000, 2, 128000)) {
+            LOG_WARN(TAG, "Failed to initialize audio encoder — continuing without audio");
+            audio_capture_->shutdown();
+            audio_capture_.reset();
+            audio_encoder_.reset();
+        }
+    }
+
     // Configure server with target (output) dimensions
     StreamConfig config;
     config.width = w;
@@ -50,13 +68,15 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate, std::atom
 
     if (!server_->start()) {
         LOG_ERROR(TAG, "Failed to start server");
+        if (audio_encoder_) audio_encoder_->shutdown();
+        if (audio_capture_) audio_capture_->shutdown();
         encoder_->shutdown();
         capture_->shutdown();
         return false;
     }
 
-    LOG_INFO(TAG, "Host started: %ux%u @ %u fps, bitrate %u, port %u",
-             w, h, fps, bitrate, port);
+    LOG_INFO(TAG, "Host started: %ux%u @ %u fps, bitrate %u, port %u, audio %s",
+             w, h, fps, bitrate, port, audio_capture_ ? "enabled" : "disabled");
 
     // Launch threads
     poll_thread_ = std::jthread([this](std::stop_token st) { server_poll_loop(st); });
@@ -64,21 +84,35 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate, std::atom
     encode_thread_ = std::jthread([this](std::stop_token st) { encode_loop(st); });
     capture_thread_ = std::jthread([this](std::stop_token st) { capture_loop(st); });
 
+    if (audio_capture_ && audio_encoder_) {
+        audio_encode_thread_ = std::jthread([this](std::stop_token st) { audio_encode_loop(st); });
+        audio_capture_thread_ = std::jthread([this](std::stop_token st) { audio_capture_loop(st); });
+    }
+
     return true;
 }
 
 void HostSession::stop() {
+    if (audio_capture_thread_.joinable()) audio_capture_thread_.request_stop();
+    if (audio_encode_thread_.joinable()) audio_encode_thread_.request_stop();
     if (capture_thread_.joinable()) capture_thread_.request_stop();
     if (encode_thread_.joinable()) encode_thread_.request_stop();
     if (send_thread_.joinable()) send_thread_.request_stop();
     if (poll_thread_.joinable()) poll_thread_.request_stop();
 
+    audio_raw_queue_.close();
+    audio_encoded_queue_.close();
+
+    if (audio_capture_thread_.joinable()) audio_capture_thread_.join();
+    if (audio_encode_thread_.joinable()) audio_encode_thread_.join();
     if (capture_thread_.joinable()) capture_thread_.join();
     if (encode_thread_.joinable()) encode_thread_.join();
     if (send_thread_.joinable()) send_thread_.join();
     if (poll_thread_.joinable()) poll_thread_.join();
 
     if (server_) server_->stop();
+    if (audio_encoder_) audio_encoder_->shutdown();
+    if (audio_capture_) audio_capture_->shutdown();
     if (encoder_) encoder_->shutdown();
     if (capture_) capture_->shutdown();
 
@@ -137,13 +171,28 @@ void HostSession::network_send_loop(std::stop_token st) {
     LOG_INFO(TAG, "Network send loop started");
 
     while (!st.stop_requested() && running_->load()) {
-        auto packet = encoded_buffer_.try_pop();
-        if (packet) {
-            server_->broadcast(*packet);
-            LOG_DEBUG(TAG, "Broadcast frame %u (%zu bytes, %s)",
-                      packet->frame_id, packet->data.size(),
-                      packet->type == FrameType::VideoKeyframe ? "keyframe" : "P-frame");
-        } else {
+        bool sent_anything = false;
+
+        // Check video encoded buffer
+        auto video_packet = encoded_buffer_.try_pop();
+        if (video_packet) {
+            server_->broadcast(*video_packet);
+            LOG_DEBUG(TAG, "Broadcast video frame %u (%zu bytes, %s)",
+                      video_packet->frame_id, video_packet->data.size(),
+                      video_packet->type == FrameType::VideoKeyframe ? "keyframe" : "P-frame");
+            sent_anything = true;
+        }
+
+        // Check audio encoded queue
+        auto audio_packet = audio_encoded_queue_.try_pop();
+        if (audio_packet) {
+            server_->broadcast(*audio_packet);
+            LOG_DEBUG(TAG, "Broadcast audio frame %u (%zu bytes)",
+                      audio_packet->frame_id, audio_packet->data.size());
+            sent_anything = true;
+        }
+
+        if (!sent_anything) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
@@ -159,6 +208,35 @@ void HostSession::server_poll_loop(std::stop_token st) {
     }
 
     LOG_INFO(TAG, "Server poll loop ended");
+}
+
+void HostSession::audio_capture_loop(std::stop_token st) {
+    LOG_INFO(TAG, "Audio capture loop started");
+
+    while (!st.stop_requested() && running_->load()) {
+        auto frame = audio_capture_->capture_frame();
+        if (frame) {
+            audio_raw_queue_.push(std::move(*frame));
+        }
+    }
+
+    LOG_INFO(TAG, "Audio capture loop ended");
+}
+
+void HostSession::audio_encode_loop(std::stop_token st) {
+    LOG_INFO(TAG, "Audio encode loop started");
+
+    while (!st.stop_requested() && running_->load()) {
+        auto frame = audio_raw_queue_.wait_pop(std::chrono::milliseconds(50));
+        if (frame) {
+            auto encoded = audio_encoder_->encode(*frame);
+            if (encoded) {
+                audio_encoded_queue_.push(std::move(*encoded));
+            }
+        }
+    }
+
+    LOG_INFO(TAG, "Audio encode loop ended");
 }
 
 } // namespace lancast

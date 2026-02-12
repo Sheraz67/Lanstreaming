@@ -13,6 +13,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # PulseAudio (needed for audio capture)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(PULSEAUDIO REQUIRED libpulse)
+    pkg_check_modules(PULSEAUDIO_SIMPLE REQUIRED libpulse-simple)
 
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(LANCAST_PLATFORM_WINDOWS TRUE)
