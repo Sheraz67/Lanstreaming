@@ -9,3 +9,7 @@ add_test(NAME test_protocol COMMAND test_protocol)
 add_executable(test_packet_roundtrip test_packet_roundtrip.cpp)
 target_link_libraries(test_packet_roundtrip PRIVATE lancast_net GTest::gtest_main)
 add_test(NAME test_packet_roundtrip COMMAND test_packet_roundtrip)
+
+add_executable(test_large_frame_roundtrip test_large_frame_roundtrip.cpp)
+target_link_libraries(test_large_frame_roundtrip PRIVATE lancast_net GTest::gtest_main)
+add_test(NAME test_large_frame_roundtrip COMMAND test_large_frame_roundtrip)

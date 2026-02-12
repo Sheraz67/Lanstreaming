@@ -27,6 +27,8 @@ public:
     // Process incoming packets (call from recv thread)
     void poll();
 
+    void set_stream_config(const StreamConfig& config) { config_ = config; }
+
     bool is_running() const { return running_.load(); }
     size_t client_count() const;
 
@@ -36,7 +38,7 @@ private:
     uint16_t port_;
     UdpSocket socket_;
     PacketFragmenter fragmenter_;
-    uint32_t sequence_ = 0;
+    uint16_t sequence_ = 0;
 
     std::mutex clients_mutex_;
     std::vector<Endpoint> clients_;

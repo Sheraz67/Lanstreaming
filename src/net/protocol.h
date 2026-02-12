@@ -8,9 +8,9 @@
 namespace lancast {
 
 // 16-byte UDP packet header
-// | Magic(1) | Version(1) | Type(1) | Flags(1) | Sequence(4) | Timestamp_us(4) | FrameID(2) | FragIdx(1) | FragTotal(1) |
+// | Magic(1) | Version(1) | Type(1) | Flags(1) | Sequence(2) | Timestamp_us(4) | FrameID(2) | FragIdx(2) | FragTotal(2) |
 static constexpr uint8_t  PROTOCOL_MAGIC   = 0xAA;
-static constexpr uint8_t  PROTOCOL_VERSION = 1;
+static constexpr uint8_t  PROTOCOL_VERSION = 2;
 static constexpr uint16_t DEFAULT_PORT     = 7878;
 static constexpr size_t   MAX_UDP_PAYLOAD  = 1200;   // Safe for most MTUs
 static constexpr size_t   HEADER_SIZE      = 16;
@@ -43,11 +43,11 @@ struct PacketHeader {
     uint8_t  version  = 0;
     uint8_t  type     = 0;
     uint8_t  flags    = 0;
-    uint32_t sequence = 0;
+    uint16_t sequence = 0;
     uint32_t timestamp_us = 0;
     uint16_t frame_id = 0;
-    uint8_t  frag_idx = 0;
-    uint8_t  frag_total = 0;
+    uint16_t frag_idx = 0;
+    uint16_t frag_total = 0;
 
     void to_network(uint8_t* buf) const {
         std::memcpy(buf, this, HEADER_SIZE);

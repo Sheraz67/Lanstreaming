@@ -16,7 +16,7 @@ TEST(PacketRoundtripTest, SmallPacketSingleFragment) {
     original.type = FrameType::VideoPFrame;
     original.data = {0x00, 0x01, 0x02, 0x03, 0x04};
 
-    uint32_t seq = 0;
+    uint16_t seq = 0;
     auto fragments = fragmenter.fragment(original, seq);
 
     ASSERT_EQ(fragments.size(), 1u);
@@ -45,7 +45,7 @@ TEST(PacketRoundtripTest, LargePacketMultipleFragments) {
     original.data.resize(MAX_FRAGMENT_DATA * 3 + 500);
     std::iota(original.data.begin(), original.data.end(), 0);
 
-    uint32_t seq = 0;
+    uint16_t seq = 0;
     auto fragments = fragmenter.fragment(original, seq);
 
     EXPECT_EQ(fragments.size(), 4u);
@@ -81,7 +81,7 @@ TEST(PacketRoundtripTest, OutOfOrderFragments) {
     original.data.resize(MAX_FRAGMENT_DATA * 2 + 100);
     std::iota(original.data.begin(), original.data.end(), 0);
 
-    uint32_t seq = 0;
+    uint16_t seq = 0;
     auto fragments = fragmenter.fragment(original, seq);
     ASSERT_EQ(fragments.size(), 3u);
 
@@ -105,7 +105,7 @@ TEST(PacketRoundtripTest, DuplicateFragment) {
     original.data.resize(MAX_FRAGMENT_DATA + 100);
     std::iota(original.data.begin(), original.data.end(), 0);
 
-    uint32_t seq = 0;
+    uint16_t seq = 0;
     auto fragments = fragmenter.fragment(original, seq);
     ASSERT_EQ(fragments.size(), 2u);
 
@@ -130,7 +130,7 @@ TEST(PacketRoundtripTest, ExactlyOneFragment) {
     original.data.resize(MAX_FRAGMENT_DATA); // Exactly one fragment
     std::iota(original.data.begin(), original.data.end(), 0);
 
-    uint32_t seq = 0;
+    uint16_t seq = 0;
     auto fragments = fragmenter.fragment(original, seq);
     ASSERT_EQ(fragments.size(), 1u);
 
@@ -146,7 +146,7 @@ TEST(PacketRoundtripTest, EmptyPacket) {
     empty.frame_id = 1;
     empty.data.clear();
 
-    uint32_t seq = 0;
+    uint16_t seq = 0;
     auto fragments = fragmenter.fragment(empty, seq);
     EXPECT_TRUE(fragments.empty());
 }
@@ -159,7 +159,7 @@ TEST(PacketRoundtripTest, SequenceNumberIncrement) {
     p.type = FrameType::VideoPFrame;
     p.data.resize(MAX_FRAGMENT_DATA * 2 + 1); // 3 fragments
 
-    uint32_t seq = 100;
+    uint16_t seq = 100;
     auto fragments = fragmenter.fragment(p, seq);
 
     EXPECT_EQ(fragments[0].header.sequence, 100u);
@@ -185,7 +185,7 @@ TEST(PacketRoundtripTest, MultipleFramesInterleaved) {
     frame2.data.resize(MAX_FRAGMENT_DATA + 200);
     std::fill(frame2.data.begin(), frame2.data.end(), 0xBB);
 
-    uint32_t seq = 0;
+    uint16_t seq = 0;
     auto frags1 = fragmenter.fragment(frame1, seq);
     auto frags2 = fragmenter.fragment(frame2, seq);
 

@@ -20,8 +20,8 @@ public:
 private:
     struct FrameState {
         uint16_t frame_id = 0;
-        uint8_t frag_total = 0;
-        uint8_t frags_received = 0;
+        uint16_t frag_total = 0;
+        uint16_t frags_received = 0;
         PacketType type = PacketType::VIDEO_DATA;
         uint8_t flags = 0;
         uint32_t timestamp_us = 0;

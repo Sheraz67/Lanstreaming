@@ -55,9 +55,37 @@ add_library(lancast_net STATIC
 target_include_directories(lancast_net PUBLIC src)
 target_link_libraries(lancast_net PUBLIC lancast_core)
 
+# --- Capture library ---
+add_library(lancast_capture STATIC
+    src/capture/screen_capture_x11.cpp
+)
+target_include_directories(lancast_capture PUBLIC src)
+target_link_libraries(lancast_capture PUBLIC
+    lancast_core
+    X11::X11
+    X11::Xext
+    FFmpeg::swscale
+    FFmpeg::avutil
+)
+
+# --- Render library ---
+add_library(lancast_render STATIC
+    src/render/sdl_renderer.cpp
+)
+target_include_directories(lancast_render PUBLIC src)
+target_link_libraries(lancast_render PUBLIC lancast_core SDL3::SDL3)
+
+# --- App library (session orchestrators) ---
+add_library(lancast_app STATIC
+    src/app/host_session.cpp
+    src/app/client_session.cpp
+)
+target_include_directories(lancast_app PUBLIC src)
+target_link_libraries(lancast_app PUBLIC lancast_net lancast_capture lancast_render)
+
 # --- Main executable ---
 add_executable(lancast src/main.cpp)
-target_link_libraries(lancast PRIVATE lancast_net lancast_core SDL3::SDL3)
+target_link_libraries(lancast PRIVATE lancast_app)
 
 # --- Tests ---
 enable_testing()
