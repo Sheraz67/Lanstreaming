@@ -21,8 +21,8 @@ static void signal_handler(int) {
 
 static void print_usage(const char* prog) {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "  %s --host [--port PORT] [--fps FPS]   Start as host\n", prog);
-    fprintf(stderr, "  %s --client IP [--port PORT]          Connect to host\n", prog);
+    fprintf(stderr, "  %s --host [--port PORT] [--fps FPS] [--bitrate BITRATE]   Start as host\n", prog);
+    fprintf(stderr, "  %s --client IP [--port PORT]                              Connect to host\n", prog);
 }
 
 int main(int argc, char* argv[]) {
@@ -32,7 +32,8 @@ int main(int argc, char* argv[]) {
     bool host_mode = false;
     std::string client_ip;
     uint16_t port = DEFAULT_PORT;
-    uint32_t fps = 10;
+    uint32_t fps = 30;
+    uint32_t bitrate = 6000000;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--host") == 0) {
@@ -43,6 +44,8 @@ int main(int argc, char* argv[]) {
             port = static_cast<uint16_t>(atoi(argv[++i]));
         } else if (strcmp(argv[i], "--fps") == 0 && i + 1 < argc) {
             fps = static_cast<uint32_t>(atoi(argv[++i]));
+        } else if (strcmp(argv[i], "--bitrate") == 0 && i + 1 < argc) {
+            bitrate = static_cast<uint32_t>(atoi(argv[++i]));
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             Logger::set_level(LogLevel::Debug);
         } else {
@@ -58,7 +61,7 @@ int main(int argc, char* argv[]) {
 
     if (host_mode) {
         HostSession session;
-        if (!session.start(port, fps, g_running)) {
+        if (!session.start(port, fps, bitrate, g_running)) {
             return 1;
         }
 

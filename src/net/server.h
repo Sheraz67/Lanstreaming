@@ -7,6 +7,7 @@
 #include <vector>
 #include <mutex>
 #include <atomic>
+#include <functional>
 
 namespace lancast {
 
@@ -28,12 +29,14 @@ public:
     void poll();
 
     void set_stream_config(const StreamConfig& config) { config_ = config; }
+    void set_keyframe_callback(std::function<void()> cb) { keyframe_cb_ = std::move(cb); }
 
     bool is_running() const { return running_.load(); }
     size_t client_count() const;
 
 private:
     void handle_hello(const Packet& pkt, const Endpoint& source);
+    void send_stream_config(const Endpoint& dest);
 
     uint16_t port_;
     UdpSocket socket_;
@@ -45,6 +48,7 @@ private:
 
     std::atomic<bool> running_{false};
     StreamConfig config_;
+    std::function<void()> keyframe_cb_;
 };
 
 } // namespace lancast

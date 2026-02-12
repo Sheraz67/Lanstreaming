@@ -75,13 +75,27 @@ add_library(lancast_render STATIC
 target_include_directories(lancast_render PUBLIC src)
 target_link_libraries(lancast_render PUBLIC lancast_core SDL3::SDL3)
 
+# --- Encode library ---
+add_library(lancast_encode STATIC
+    src/encode/video_encoder.cpp
+)
+target_include_directories(lancast_encode PUBLIC src)
+target_link_libraries(lancast_encode PUBLIC lancast_core FFmpeg::avcodec FFmpeg::avutil)
+
+# --- Decode library ---
+add_library(lancast_decode STATIC
+    src/decode/video_decoder.cpp
+)
+target_include_directories(lancast_decode PUBLIC src)
+target_link_libraries(lancast_decode PUBLIC lancast_core FFmpeg::avcodec FFmpeg::avutil)
+
 # --- App library (session orchestrators) ---
 add_library(lancast_app STATIC
     src/app/host_session.cpp
     src/app/client_session.cpp
 )
 target_include_directories(lancast_app PUBLIC src)
-target_link_libraries(lancast_app PUBLIC lancast_net lancast_capture lancast_render)
+target_link_libraries(lancast_app PUBLIC lancast_net lancast_capture lancast_render lancast_encode lancast_decode)
 
 # --- Main executable ---
 add_executable(lancast src/main.cpp)

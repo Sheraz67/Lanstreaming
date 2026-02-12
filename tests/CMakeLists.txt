@@ -13,3 +13,7 @@ add_test(NAME test_packet_roundtrip COMMAND test_packet_roundtrip)
 add_executable(test_large_frame_roundtrip test_large_frame_roundtrip.cpp)
 target_link_libraries(test_large_frame_roundtrip PRIVATE lancast_net GTest::gtest_main)
 add_test(NAME test_large_frame_roundtrip COMMAND test_large_frame_roundtrip)
+
+add_executable(test_video_codec test_video_codec.cpp)
+target_link_libraries(test_video_codec PRIVATE lancast_encode lancast_decode GTest::gtest_main)
+add_test(NAME test_video_codec COMMAND test_video_codec)

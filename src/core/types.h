@@ -13,6 +13,7 @@ struct StreamConfig {
     uint32_t video_bitrate = 6000000; // 6 Mbps
     uint32_t audio_sample_rate = 48000;
     uint16_t audio_channels = 2;
+    std::vector<uint8_t> codec_data;  // SPS/PPS extradata (Annex B)
 };
 
 struct RawVideoFrame {

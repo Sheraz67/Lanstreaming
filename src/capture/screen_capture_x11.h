@@ -22,6 +22,8 @@ public:
 
     uint32_t native_width() const override { return screen_width_; }
     uint32_t native_height() const override { return screen_height_; }
+    uint32_t target_width() const override { return target_width_; }
+    uint32_t target_height() const override { return target_height_; }
 
 private:
     Display* display_ = nullptr;

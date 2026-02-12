@@ -70,6 +70,7 @@ void Server::poll() {
         }
         case PacketType::KEYFRAME_REQ:
             LOG_INFO(TAG, "Keyframe requested by %s:%u", result->source.ip.c_str(), result->source.port);
+            if (keyframe_cb_) keyframe_cb_();
             break;
         default:
             break;
@@ -111,6 +112,22 @@ void Server::handle_hello(const Packet& pkt, const Endpoint& source) {
     std::memcpy(welcome.payload.data(), &wp, sizeof(WelcomePayload));
 
     send_to(welcome, source);
+    send_stream_config(source);
+}
+
+void Server::send_stream_config(const Endpoint& dest) {
+    if (config_.codec_data.empty()) return;
+
+    Packet pkt;
+    pkt.header.magic = PROTOCOL_MAGIC;
+    pkt.header.version = PROTOCOL_VERSION;
+    pkt.header.type = static_cast<uint8_t>(PacketType::STREAM_CONFIG);
+    pkt.header.sequence = sequence_++;
+    pkt.payload = config_.codec_data;
+
+    send_to(pkt, dest);
+    LOG_INFO(TAG, "Sent STREAM_CONFIG (%zu bytes) to %s:%u",
+             config_.codec_data.size(), dest.ip.c_str(), dest.port);
 }
 
 } // namespace lancast

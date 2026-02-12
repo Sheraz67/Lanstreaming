@@ -16,6 +16,8 @@ public:
 
     virtual uint32_t native_width() const = 0;
     virtual uint32_t native_height() const = 0;
+    virtual uint32_t target_width() const = 0;
+    virtual uint32_t target_height() const = 0;
 };
 
 } // namespace lancast

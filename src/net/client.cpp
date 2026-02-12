@@ -56,6 +56,17 @@ bool Client::connect(const std::string& host_ip, uint16_t port) {
         config_.audio_channels = wp.audio_channels;
     }
 
+    // Wait for STREAM_CONFIG packet (codec extradata / SPS/PPS)
+    auto config_result = socket_.recv_from();
+    if (config_result) {
+        auto config_pkt = Packet::deserialize(config_result->data.data(), config_result->data.size());
+        if (config_pkt.header.is_valid() &&
+            static_cast<PacketType>(config_pkt.header.type) == PacketType::STREAM_CONFIG) {
+            config_.codec_data = std::move(config_pkt.payload);
+            LOG_INFO(TAG, "Received STREAM_CONFIG: %zu bytes codec data", config_.codec_data.size());
+        }
+    }
+
     // Switch to shorter timeout for streaming
     socket_.set_recv_timeout(50);
     connected_ = true;

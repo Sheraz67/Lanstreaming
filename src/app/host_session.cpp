@@ -11,7 +11,7 @@ HostSession::~HostSession() {
     stop();
 }
 
-bool HostSession::start(uint16_t port, uint32_t fps, std::atomic<bool>& running) {
+bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate, std::atomic<bool>& running) {
     running_ = &running;
     fps_ = fps;
 
@@ -22,27 +22,46 @@ bool HostSession::start(uint16_t port, uint32_t fps, std::atomic<bool>& running)
         return false;
     }
 
-    // Configure server with actual capture dimensions
-    StreamConfig config;
-    config.width = capture_->native_width();
-    config.height = capture_->native_height();
-    config.fps = fps;
+    uint32_t w = capture_->target_width();
+    uint32_t h = capture_->target_height();
 
-    server_ = std::make_unique<Server>(port);
-    server_->set_stream_config(config);
-
-    if (!server_->start()) {
-        LOG_ERROR(TAG, "Failed to start server");
+    // Initialize encoder
+    encoder_ = std::make_unique<VideoEncoder>();
+    if (!encoder_->init(w, h, fps, bitrate)) {
+        LOG_ERROR(TAG, "Failed to initialize video encoder");
         capture_->shutdown();
         return false;
     }
 
-    LOG_INFO(TAG, "Host started: %ux%u @ %u fps, port %u",
-             config.width, config.height, fps, port);
+    // Configure server with target (output) dimensions
+    StreamConfig config;
+    config.width = w;
+    config.height = h;
+    config.fps = fps;
+    config.video_bitrate = bitrate;
+    config.codec_data = encoder_->extradata();
+
+    // Set keyframe callback
+    server_ = std::make_unique<Server>(port);
+    server_->set_stream_config(config);
+    server_->set_keyframe_callback([this]() {
+        if (encoder_) encoder_->request_keyframe();
+    });
+
+    if (!server_->start()) {
+        LOG_ERROR(TAG, "Failed to start server");
+        encoder_->shutdown();
+        capture_->shutdown();
+        return false;
+    }
+
+    LOG_INFO(TAG, "Host started: %ux%u @ %u fps, bitrate %u, port %u",
+             w, h, fps, bitrate, port);
 
     // Launch threads
     poll_thread_ = std::jthread([this](std::stop_token st) { server_poll_loop(st); });
     send_thread_ = std::jthread([this](std::stop_token st) { network_send_loop(st); });
+    encode_thread_ = std::jthread([this](std::stop_token st) { encode_loop(st); });
     capture_thread_ = std::jthread([this](std::stop_token st) { capture_loop(st); });
 
     return true;
@@ -50,14 +69,17 @@ bool HostSession::start(uint16_t port, uint32_t fps, std::atomic<bool>& running)
 
 void HostSession::stop() {
     if (capture_thread_.joinable()) capture_thread_.request_stop();
+    if (encode_thread_.joinable()) encode_thread_.request_stop();
     if (send_thread_.joinable()) send_thread_.request_stop();
     if (poll_thread_.joinable()) poll_thread_.request_stop();
 
     if (capture_thread_.joinable()) capture_thread_.join();
+    if (encode_thread_.joinable()) encode_thread_.join();
     if (send_thread_.joinable()) send_thread_.join();
     if (poll_thread_.joinable()) poll_thread_.join();
 
     if (server_) server_->stop();
+    if (encoder_) encoder_->shutdown();
     if (capture_) capture_->shutdown();
 
     LOG_INFO(TAG, "Host session stopped");
@@ -75,15 +97,8 @@ void HostSession::capture_loop(std::stop_token st) {
 
         auto raw_frame = capture_->capture_frame();
         if (raw_frame) {
-            // Wrap raw YUV data in an EncodedPacket for transport
-            EncodedPacket packet;
-            packet.data = std::move(raw_frame->data);
-            packet.type = FrameType::VideoKeyframe; // Raw frames are always keyframes
-            packet.pts_us = clock.now_us();
-            packet.frame_id = frame_id_++;
-
-            if (!frame_buffer_.try_push(std::move(packet))) {
-                LOG_DEBUG(TAG, "Frame buffer full, dropping frame");
+            if (!raw_buffer_.try_push(std::move(*raw_frame))) {
+                LOG_DEBUG(TAG, "Raw buffer full, dropping frame");
             }
         }
 
@@ -98,15 +113,36 @@ void HostSession::capture_loop(std::stop_token st) {
     LOG_INFO(TAG, "Capture loop ended");
 }
 
+void HostSession::encode_loop(std::stop_token st) {
+    LOG_INFO(TAG, "Encode loop started");
+
+    while (!st.stop_requested() && running_->load()) {
+        auto raw_frame = raw_buffer_.try_pop();
+        if (raw_frame) {
+            auto encoded = encoder_->encode(*raw_frame);
+            if (encoded) {
+                if (!encoded_buffer_.try_push(std::move(*encoded))) {
+                    LOG_DEBUG(TAG, "Encoded buffer full, dropping frame");
+                }
+            }
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
+    LOG_INFO(TAG, "Encode loop ended");
+}
+
 void HostSession::network_send_loop(std::stop_token st) {
     LOG_INFO(TAG, "Network send loop started");
 
     while (!st.stop_requested() && running_->load()) {
-        auto packet = frame_buffer_.try_pop();
+        auto packet = encoded_buffer_.try_pop();
         if (packet) {
             server_->broadcast(*packet);
-            LOG_DEBUG(TAG, "Broadcast frame %u (%zu bytes)",
-                      packet->frame_id, packet->data.size());
+            LOG_DEBUG(TAG, "Broadcast frame %u (%zu bytes, %s)",
+                      packet->frame_id, packet->data.size(),
+                      packet->type == FrameType::VideoKeyframe ? "keyframe" : "P-frame");
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }

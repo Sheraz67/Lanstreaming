@@ -20,8 +20,8 @@ bool ClientSession::connect(const std::string& host_ip, uint16_t port) {
     }
 
     const auto& config = client_.stream_config();
-    LOG_INFO(TAG, "Connected: stream %ux%u @ %u fps",
-             config.width, config.height, config.fps);
+    LOG_INFO(TAG, "Connected: stream %ux%u @ %u fps, codec_data %zu bytes",
+             config.width, config.height, config.fps, config.codec_data.size());
 
     return true;
 }
@@ -31,14 +31,25 @@ void ClientSession::run(std::atomic<bool>& running) {
 
     const auto& config = client_.stream_config();
 
+    // Initialize decoder
+    decoder_ = std::make_unique<VideoDecoder>();
+    if (!decoder_->init(config.width, config.height, config.codec_data)) {
+        LOG_ERROR(TAG, "Failed to initialize video decoder");
+        return;
+    }
+
     // Initialize SDL renderer
     if (!renderer_.init(config.width, config.height, "lancast - viewer")) {
         LOG_ERROR(TAG, "Failed to initialize SDL renderer");
         return;
     }
 
-    // Start receive thread
+    // Start receive and decode threads
     recv_thread_ = std::jthread([this](std::stop_token st) { recv_loop(st); });
+    decode_thread_ = std::jthread([this](std::stop_token st) { decode_loop(st); });
+
+    // Request a keyframe so we start cleanly
+    client_.request_keyframe();
 
     LOG_INFO(TAG, "Render loop started");
 
@@ -52,17 +63,10 @@ void ClientSession::run(std::atomic<bool>& running) {
             break;
         }
 
-        // Try to get a video frame
-        auto frame = video_queue_.try_pop();
+        // Try to get a decoded video frame
+        auto frame = decoded_queue_.try_pop();
         if (frame) {
-            // Interpret EncodedPacket.data as raw YUV420p
-            RawVideoFrame raw;
-            raw.data = std::move(frame->data);
-            raw.width = config.width;
-            raw.height = config.height;
-            raw.pts_us = frame->pts_us;
-
-            renderer_.render_frame(raw);
+            renderer_.render_frame(*frame);
             frames_rendered++;
 
             if (frames_rendered % 30 == 0) {
@@ -82,10 +86,16 @@ void ClientSession::stop() {
         recv_thread_.request_stop();
         recv_thread_.join();
     }
+    if (decode_thread_.joinable()) {
+        decode_thread_.request_stop();
+        decode_thread_.join();
+    }
 
     video_queue_.close();
     audio_queue_.close();
+    decoded_queue_.close();
 
+    if (decoder_) decoder_->shutdown();
     renderer_.shutdown();
     client_.disconnect();
 
@@ -100,6 +110,22 @@ void ClientSession::recv_loop(std::stop_token st) {
     }
 
     LOG_INFO(TAG, "Receive loop ended");
+}
+
+void ClientSession::decode_loop(std::stop_token st) {
+    LOG_INFO(TAG, "Decode loop started");
+
+    while (!st.stop_requested() && running_->load()) {
+        auto packet = video_queue_.wait_pop(std::chrono::milliseconds(50));
+        if (packet) {
+            auto decoded = decoder_->decode(*packet);
+            if (decoded) {
+                decoded_queue_.push(std::move(*decoded));
+            }
+        }
+    }
+
+    LOG_INFO(TAG, "Decode loop ended");
 }
 
 } // namespace lancast
