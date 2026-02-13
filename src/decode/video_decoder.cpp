@@ -95,8 +95,9 @@ std::optional<RawVideoFrame> VideoDecoder::decode(const EncodedPacket& packet) {
             return std::nullopt;
         }
 
-        int w = av_frame_->width;
-        int h = av_frame_->height;
+        // Dimensions should always be even for YUV420P
+        int w = av_frame_->width & ~1;
+        int h = av_frame_->height & ~1;
         int half_w = w / 2;
         int half_h = h / 2;
 

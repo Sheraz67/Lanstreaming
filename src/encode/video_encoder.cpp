@@ -96,29 +96,39 @@ std::optional<EncodedPacket> VideoEncoder::encode(const RawVideoFrame& frame) {
         return std::nullopt;
     }
 
-    // Copy YUV planes row-by-row (linesize may differ from width)
+    // Copy YUV planes from compact RawVideoFrame into FFmpeg's padded frame.
+    // FFmpeg's linesize[] may be larger than width due to alignment padding.
     const uint8_t* src = frame.data.data();
     int w = static_cast<int>(width_);
     int h = static_cast<int>(height_);
+    int half_w = w / 2;
+    int half_h = h / 2;
 
     // Y plane
+    int y_stride = av_frame_->linesize[0];
     for (int y = 0; y < h; ++y) {
-        std::memcpy(av_frame_->data[0] + y * av_frame_->linesize[0],
-                    src + y * w, w);
+        uint8_t* dst_row = av_frame_->data[0] + y * y_stride;
+        std::memcpy(dst_row, src + y * w, w);
+        if (y_stride > w)
+            std::memset(dst_row + w, 0, y_stride - w);
     }
     // U plane
     const uint8_t* u_src = src + w * h;
-    int half_w = w / 2;
-    int half_h = h / 2;
+    int u_stride = av_frame_->linesize[1];
     for (int y = 0; y < half_h; ++y) {
-        std::memcpy(av_frame_->data[1] + y * av_frame_->linesize[1],
-                    u_src + y * half_w, half_w);
+        uint8_t* dst_row = av_frame_->data[1] + y * u_stride;
+        std::memcpy(dst_row, u_src + y * half_w, half_w);
+        if (u_stride > half_w)
+            std::memset(dst_row + half_w, 0, u_stride - half_w);
     }
     // V plane
     const uint8_t* v_src = u_src + half_w * half_h;
+    int v_stride = av_frame_->linesize[2];
     for (int y = 0; y < half_h; ++y) {
-        std::memcpy(av_frame_->data[2] + y * av_frame_->linesize[2],
-                    v_src + y * half_w, half_w);
+        uint8_t* dst_row = av_frame_->data[2] + y * v_stride;
+        std::memcpy(dst_row, v_src + y * half_w, half_w);
+        if (v_stride > half_w)
+            std::memset(dst_row + half_w, 0, v_stride - half_w);
     }
 
     av_frame_->pts = pts_++;

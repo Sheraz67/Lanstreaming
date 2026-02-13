@@ -33,8 +33,11 @@ bool ScreenCaptureX11::init(uint32_t target_width, uint32_t target_height) {
     screen_height_ = static_cast<uint32_t>(attrs.height);
 
     // If target is 0, use native screen resolution
+    // YUV420P requires even dimensions for chroma subsampling
     target_width_ = (target_width > 0) ? target_width : screen_width_;
     target_height_ = (target_height > 0) ? target_height : screen_height_;
+    target_width_ &= ~1u;
+    target_height_ &= ~1u;
 
     LOG_INFO(TAG, "Screen size: %ux%u, target: %ux%u",
              screen_width_, screen_height_, target_width_, target_height_);
