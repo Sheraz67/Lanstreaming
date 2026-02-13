@@ -1,4 +1,6 @@
 build/
+build-appimage/
+*.AppImage
 .cache/
 compile_commands.json
 *.swp
