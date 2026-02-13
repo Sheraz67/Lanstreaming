@@ -1,6 +1,8 @@
 #pragma once
 
+#include "capture/capture_source.h"
 #include <string>
+#include <vector>
 #include <cstdint>
 
 struct SDL_Window;
@@ -16,7 +18,8 @@ enum class LaunchMode {
 
 struct LaunchConfig {
     LaunchMode mode = LaunchMode::None;
-    std::string host_ip;  // Only set for Client mode
+    std::string host_ip;          // Only set for Client mode
+    unsigned long window_id = 0;  // 0 = full screen
 };
 
 class LauncherUI {
@@ -43,6 +46,12 @@ private:
     std::string ip_text_;      // IP text buffer
     bool done_ = false;
     LaunchConfig result_;
+
+    // Window selection state
+    bool window_select_ = false;
+    std::vector<WindowInfo> windows_;
+    int window_selected_ = 0;  // 0 = Entire Screen, 1+ = window index
+    int window_scroll_ = 0;
 };
 
 } // namespace lancast

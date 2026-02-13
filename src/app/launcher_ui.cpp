@@ -1,7 +1,10 @@
 #include "app/launcher_ui.h"
+#include "capture/screen_capture_x11.h"
+#undef None  // X11/X.h defines None as 0L, conflicts with LaunchMode::None
 #include "core/logger.h"
 
 #include <SDL3/SDL.h>
+#include <algorithm>
 
 namespace lancast {
 
@@ -53,25 +56,46 @@ LaunchConfig LauncherUI::run() {
 
                 case SDL_EVENT_KEY_DOWN:
                     if (event.key.key == SDLK_ESCAPE) {
-                        if (ip_entry_) {
+                        if (window_select_) {
+                            window_select_ = false;
+                        } else if (ip_entry_) {
                             ip_entry_ = false;
                         } else {
                             done_ = true;
                             result_.mode = LaunchMode::None;
                         }
                     } else if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER) {
-                        if (ip_entry_) {
+                        if (window_select_) {
+                            // Window selection confirmed
+                            if (window_selected_ == 0) {
+                                result_.window_id = 0; // Entire screen
+                            } else {
+                                result_.window_id = windows_[window_selected_ - 1].id;
+                            }
+                            result_.mode = LaunchMode::Host;
+                            done_ = true;
+                        } else if (ip_entry_) {
                             if (!ip_text_.empty()) {
                                 result_.mode = LaunchMode::Client;
                                 result_.host_ip = ip_text_;
                                 done_ = true;
                             }
                         } else if (selected_ == 0) {
-                            result_.mode = LaunchMode::Host;
-                            done_ = true;
+                            // Host selected — show window picker
+                            windows_ = ScreenCaptureX11::list_windows();
+                            window_selected_ = 0;
+                            window_scroll_ = 0;
+                            window_select_ = true;
                         } else {
                             ip_entry_ = true;
                             ip_text_.clear();
+                        }
+                    } else if (window_select_) {
+                        int total = 1 + static_cast<int>(windows_.size());
+                        if (event.key.key == SDLK_UP) {
+                            if (window_selected_ > 0) window_selected_--;
+                        } else if (event.key.key == SDLK_DOWN) {
+                            if (window_selected_ < total - 1) window_selected_++;
                         }
                     } else if (!ip_entry_) {
                         if (event.key.key == SDLK_UP || event.key.key == SDLK_DOWN ||
@@ -131,7 +155,63 @@ void LauncherUI::render() {
 
     y += 50.0f;
 
-    if (!ip_entry_) {
+    if (window_select_) {
+        // Window picker screen
+        SDL_SetRenderDrawColor(renderer_, 180, 180, 180, 255);
+        SDL_RenderDebugText(renderer_, x, y, "Select capture source:");
+        y += 30.0f;
+
+        int total = 1 + static_cast<int>(windows_.size());
+        // How many items fit on screen
+        int max_visible = 8;
+        // Adjust scroll to keep selected visible
+        if (window_selected_ < window_scroll_) {
+            window_scroll_ = window_selected_;
+        } else if (window_selected_ >= window_scroll_ + max_visible) {
+            window_scroll_ = window_selected_ - max_visible + 1;
+        }
+
+        int end = std::min(total, window_scroll_ + max_visible);
+        for (int i = window_scroll_; i < end; ++i) {
+            bool is_selected = (i == window_selected_);
+            if (is_selected) {
+                SDL_SetRenderDrawColor(renderer_, 100, 255, 100, 255);
+                SDL_RenderDebugText(renderer_, x, y, ">");
+            } else {
+                SDL_SetRenderDrawColor(renderer_, 180, 180, 180, 255);
+            }
+
+            char label[64];
+            if (i == 0) {
+                snprintf(label, sizeof(label), "  [ Entire Screen ]");
+            } else {
+                const auto& wi = windows_[i - 1];
+                // Truncate title to fit
+                std::string truncated = wi.title;
+                if (truncated.size() > 35) {
+                    truncated = truncated.substr(0, 32) + "...";
+                }
+                snprintf(label, sizeof(label), "  %.35s (%ux%u)",
+                         truncated.c_str(), wi.width, wi.height);
+            }
+            SDL_RenderDebugText(renderer_, x + 8.0f, y, label);
+            y += 20.0f;
+        }
+
+        y += 10.0f;
+        SDL_SetRenderDrawColor(renderer_, 100, 100, 100, 255);
+        SDL_RenderDebugText(renderer_, x, y, "Up/Down to select, Enter to confirm");
+        y += 20.0f;
+        SDL_RenderDebugText(renderer_, x, y, "ESC to go back");
+
+        if (total > max_visible) {
+            y += 20.0f;
+            char scroll_info[32];
+            snprintf(scroll_info, sizeof(scroll_info), "[%d/%d]",
+                     window_selected_ + 1, total);
+            SDL_RenderDebugText(renderer_, x, y, scroll_info);
+        }
+    } else if (!ip_entry_) {
         // Menu selection
         const char* items[] = {"[ Host Session ]", "[ Join Session ]"};
         for (int i = 0; i < 2; ++i) {

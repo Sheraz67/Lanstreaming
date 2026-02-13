@@ -12,7 +12,8 @@ HostSession::~HostSession() {
 }
 
 bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
-                         uint32_t width, uint32_t height, std::atomic<bool>& running) {
+                         uint32_t width, uint32_t height, unsigned long window_id,
+                         std::atomic<bool>& running) {
     running_ = &running;
     fps_ = fps;
     target_bitrate_ = bitrate;
@@ -20,7 +21,7 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
 
     // Initialize screen capture
     capture_ = std::make_unique<ScreenCaptureX11>();
-    if (!capture_->init(width, height)) {
+    if (!capture_->init(width, height, window_id)) {
         LOG_ERROR(TAG, "Failed to initialize screen capture");
         return false;
     }

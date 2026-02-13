@@ -3,6 +3,8 @@
 #include "app/host_session.h"
 #include "app/client_session.h"
 #include "app/launcher_ui.h"
+#include "capture/screen_capture_x11.h"
+#undef None  // X11/X.h defines None as 0L, conflicts with LaunchMode::None
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -24,8 +26,9 @@ static void print_usage(const char* prog) {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "  %s                                                        Launch UI\n", prog);
     fprintf(stderr, "  %s --host [--port PORT] [--fps FPS] [--bitrate BITRATE]   Start as host\n", prog);
-    fprintf(stderr, "             [--resolution WxH]\n");
+    fprintf(stderr, "             [--resolution WxH] [--window WID]\n");
     fprintf(stderr, "  %s --client IP [--port PORT]                              Connect to host\n", prog);
+    fprintf(stderr, "  %s --list-windows                                         List available windows\n", prog);
 }
 
 static bool parse_resolution(const char* str, uint32_t& w, uint32_t& h) {
@@ -40,9 +43,9 @@ static bool parse_resolution(const char* str, uint32_t& w, uint32_t& h) {
 }
 
 static int run_host(uint16_t port, uint32_t fps, uint32_t bitrate,
-                    uint32_t width, uint32_t height) {
+                    uint32_t width, uint32_t height, unsigned long window_id) {
     HostSession session;
-    if (!session.start(port, fps, bitrate, width, height, g_running)) {
+    if (!session.start(port, fps, bitrate, width, height, window_id, g_running)) {
         return 1;
     }
 
@@ -71,12 +74,14 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signal_handler);
 
     bool host_mode = false;
+    bool list_windows = false;
     std::string client_ip;
     uint16_t port = DEFAULT_PORT;
     uint32_t fps = 30;
     uint32_t bitrate = 6000000;
     uint32_t width = 0;   // 0 = auto (capture full screen)
     uint32_t height = 0;
+    unsigned long window_id = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--host") == 0) {
@@ -94,6 +99,10 @@ int main(int argc, char* argv[]) {
                 fprintf(stderr, "Invalid resolution format. Use WxH (e.g. 1920x1080)\n");
                 return 1;
             }
+        } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
+            window_id = strtoul(argv[++i], nullptr, 0);
+        } else if (strcmp(argv[i], "--list-windows") == 0) {
+            list_windows = true;
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             Logger::set_level(LogLevel::Debug);
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -103,6 +112,21 @@ int main(int argc, char* argv[]) {
             print_usage(argv[0]);
             return 1;
         }
+    }
+
+    // --list-windows: print and exit
+    if (list_windows) {
+        auto windows = ScreenCaptureX11::list_windows();
+        if (windows.empty()) {
+            printf("No windows found.\n");
+        } else {
+            printf("%-12s %-10s %s\n", "Window ID", "Size", "Title");
+            printf("%-12s %-10s %s\n", "---------", "----", "-----");
+            for (const auto& w : windows) {
+                printf("0x%-10lx %ux%-7u %s\n", w.id, w.width, w.height, w.title.c_str());
+            }
+        }
+        return 0;
     }
 
     // If no mode specified, launch the UI
@@ -118,7 +142,7 @@ int main(int argc, char* argv[]) {
 
         switch (config.mode) {
             case LaunchMode::Host:
-                return run_host(port, fps, bitrate, width, height);
+                return run_host(port, fps, bitrate, width, height, config.window_id);
             case LaunchMode::Client:
                 return run_client(config.host_ip, port);
             case LaunchMode::None:
@@ -128,7 +152,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (host_mode) {
-        return run_host(port, fps, bitrate, width, height);
+        return run_host(port, fps, bitrate, width, height, window_id);
     } else {
         return run_client(client_ip, port);
     }

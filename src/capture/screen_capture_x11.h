@@ -16,7 +16,8 @@ public:
     ScreenCaptureX11() = default;
     ~ScreenCaptureX11() override;
 
-    bool init(uint32_t target_width, uint32_t target_height) override;
+    bool init(uint32_t target_width, uint32_t target_height,
+              unsigned long window_id = 0) override;
     std::optional<RawVideoFrame> capture_frame() override;
     void shutdown() override;
 
@@ -25,9 +26,12 @@ public:
     uint32_t target_width() const override { return target_width_; }
     uint32_t target_height() const override { return target_height_; }
 
+    static std::vector<WindowInfo> list_windows();
+
 private:
     Display* display_ = nullptr;
     Window root_ = 0;
+    Window target_window_ = 0;
     XImage* ximage_ = nullptr;
     XShmSegmentInfo shm_info_{};
 
@@ -39,6 +43,7 @@ private:
     SwsContext* sws_ctx_ = nullptr;
     bool shm_attached_ = false;
     bool initialized_ = false;
+    bool use_window_ = false;   // true when capturing a specific window (not root)
 };
 
 } // namespace lancast
