@@ -89,6 +89,7 @@ bool VideoEncoder::init(uint32_t width, uint32_t height, uint32_t fps, uint32_t 
 }
 
 std::optional<EncodedPacket> VideoEncoder::encode(const RawVideoFrame& frame) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!initialized_) return std::nullopt;
 
     if (av_frame_make_writable(av_frame_.get()) < 0) {
@@ -181,6 +182,7 @@ void VideoEncoder::request_keyframe() {
 }
 
 bool VideoEncoder::set_bitrate(uint32_t bitrate) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (bitrate == bitrate_) return true;
     if (!initialized_) return false;
 

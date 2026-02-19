@@ -3,6 +3,7 @@
 #include "core/types.h"
 #include "core/ffmpeg_ptrs.h"
 #include <atomic>
+#include <mutex>
 #include <optional>
 #include <vector>
 #include <cstdint>
@@ -36,6 +37,7 @@ private:
     std::atomic<bool> force_keyframe_{false};
     std::vector<uint8_t> extradata_;
     bool initialized_ = false;
+    std::mutex mutex_;
 };
 
 } // namespace lancast
