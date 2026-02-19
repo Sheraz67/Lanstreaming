@@ -71,8 +71,8 @@ bool Client::connect(const std::string& host_ip, uint16_t port) {
         }
     }
 
-    // Switch to shorter timeout for streaming
-    socket_.set_recv_timeout(50);
+    // Short timeout for low-latency streaming
+    socket_.set_recv_timeout(5);
     state_ = ConnectionState::Connected;
     LOG_INFO(TAG, "Connected to %s:%u (%ux%u@%u)", host_ip.c_str(), port,
              config_.width, config_.height, config_.fps);

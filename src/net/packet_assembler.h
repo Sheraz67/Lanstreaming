@@ -25,7 +25,7 @@ public:
     std::vector<IncompleteKeyframe> check_incomplete_keyframes(int64_t age_ms = 100);
 
     // Purge stale incomplete frames older than timeout_ms
-    void purge_stale(int64_t timeout_ms = 500);
+    void purge_stale(int64_t timeout_ms = 200);
 
 private:
     struct FrameState {

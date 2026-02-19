@@ -39,6 +39,9 @@ bool SdlRenderer::init(uint32_t width, uint32_t height, const std::string& title
         return false;
     }
 
+    // Disable VSync for lowest latency — we drive the frame rate from the network
+    SDL_SetRenderVSync(renderer_, SDL_RENDERER_VSYNC_DISABLED);
+
     texture_ = SDL_CreateTexture(renderer_,
                                   SDL_PIXELFORMAT_IYUV,
                                   SDL_TEXTUREACCESS_STREAMING,

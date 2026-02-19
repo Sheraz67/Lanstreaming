@@ -37,9 +37,9 @@ private:
     std::unique_ptr<AudioPlayer> audio_player_;
     SdlRenderer renderer_;
 
-    ThreadSafeQueue<EncodedPacket> video_queue_{30};
-    ThreadSafeQueue<EncodedPacket> audio_queue_{60};
-    ThreadSafeQueue<RawVideoFrame> decoded_queue_{4};
+    ThreadSafeQueue<EncodedPacket> video_queue_{3};
+    ThreadSafeQueue<EncodedPacket> audio_queue_{8};
+    ThreadSafeQueue<RawVideoFrame> decoded_queue_{2};
 
     std::atomic<bool>* running_ = nullptr;
     lancast::jthread recv_thread_;

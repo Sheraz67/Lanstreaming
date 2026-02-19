@@ -85,13 +85,16 @@ void ClientSession::run(std::atomic<bool>& running) {
             break;
         }
 
-        // Try to get a decoded video frame
-        auto frame = decoded_queue_.try_pop();
+        // Drain decoded queue — always render the LATEST frame, skip stale ones
+        std::optional<RawVideoFrame> frame;
+        while (auto f = decoded_queue_.try_pop()) {
+            frame = std::move(f);
+        }
         if (frame) {
             renderer_.render_frame(*frame);
             frames_rendered++;
 
-            if (frames_rendered % 30 == 0) {
+            if (frames_rendered % 300 == 0) {
                 LOG_INFO(TAG, "Rendered %u frames", frames_rendered);
             }
         } else {
@@ -144,7 +147,7 @@ void ClientSession::decode_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Decode loop started");
 
     while (!st.stop_requested() && running_->load()) {
-        auto packet = video_queue_.wait_pop(std::chrono::milliseconds(50));
+        auto packet = video_queue_.wait_pop(std::chrono::milliseconds(5));
         if (packet) {
             auto decoded = decoder_->decode(*packet);
             if (decoded) {
@@ -160,7 +163,7 @@ void ClientSession::audio_decode_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Audio decode loop started");
 
     while (!st.stop_requested() && running_->load()) {
-        auto packet = audio_queue_.wait_pop(std::chrono::milliseconds(50));
+        auto packet = audio_queue_.wait_pop(std::chrono::milliseconds(10));
         if (packet) {
             auto decoded = audio_decoder_->decode(*packet);
             if (decoded) {
