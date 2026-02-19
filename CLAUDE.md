@@ -2,15 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Commit Rules
+
+- Never include `Co-Authored-By` lines in commits.
+
 ## Project Overview
 
-**lancast** is a native C++ desktop application for streaming screen and audio over LAN networks. Manual IP entry (no auto-discovery). Linux (X11) is the primary platform; Windows and macOS are planned later. The full specification lives in `lancast-plan.md`.
+**lancast** is a native C++ desktop application for streaming screen and audio over LAN networks. Manual IP entry (no auto-discovery). Supports Linux (X11 + PulseAudio) and macOS (ScreenCaptureKit, macOS 12.3+). Windows is planned later. The full specification lives in `lancast-plan.md`.
 
 ## Build & Run
 
 ```bash
 # Install dependencies (Linux)
 sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libx11-dev libxext-dev libpulse-dev
+
+# macOS: no manual dependency install needed — build-dmg.sh handles everything
 
 # Configure and build
 cmake -B build && cmake --build build
@@ -35,8 +41,12 @@ ctest --test-dir build -R test_ring_buffer
 # Build with verbose output (useful for debugging compile errors)
 cmake --build build --verbose
 
-# Build AppImage
+# Build AppImage (Linux)
 bash packaging/build-appimage.sh
+
+# Build DMG (macOS — auto-installs Homebrew + FFmpeg if needed)
+bash packaging/build-dmg.sh
+# Output: Lancast-0.1.0-macOS.dmg (fully self-contained, no deps for end user)
 ```
 
 SDL3 and GoogleTest 1.15+ are fetched via CMake FetchContent. Requires CMake 3.21+ and C++20.
@@ -47,9 +57,12 @@ All code is in the `lancast` namespace.
 
 ### Host Pipeline (6 threads)
 ```
-X11 XShm capture -> [RingBuffer] -> VideoEncoder(H.264) -> [RingBuffer] -> UDP Server
-PulseAudio mon   -> [TSQueue]    -> AudioEncoder(Opus)  -> [TSQueue]   ----^
-                                                         Server poll thread (NACK/keyframe requests)
+Linux:  X11 XShm capture   -> [RingBuffer] -> VideoEncoder(H.264) -> [RingBuffer] -> UDP Server
+        PulseAudio monitor  -> [TSQueue]    -> AudioEncoder(Opus)  -> [TSQueue]   ----^
+
+macOS:  ScreenCaptureKit    -> [RingBuffer] -> VideoEncoder(H.264) -> [RingBuffer] -> UDP Server
+        (shared SCStream)   -> [TSQueue]    -> AudioEncoder(Opus)  -> [TSQueue]   ----^
+                                                                  Server poll thread (NACK/keyframe requests)
 ```
 
 ### Client Pipeline (3 threads + main thread SDL render loop + SDL audio callback)
@@ -66,8 +79,8 @@ When adding new source files, add them to the appropriate static library target 
 |--------|---------|----------|
 | `lancast_core` | `core/logger.cpp` + headers | FFmpeg libs |
 | `lancast_net` | `net/socket, packet_fragmenter, packet_assembler, server, client` | lancast_core |
-| `lancast_capture` | `capture/screen_capture_x11` | lancast_core, X11, swscale |
-| `lancast_audio_capture` | `capture/audio_capture_pulse` | lancast_core, PulseAudio |
+| `lancast_capture` | Linux: `capture/screen_capture_x11`, macOS: `capture/screen_capture_mac.mm` | lancast_core, X11/ScreenCaptureKit, swscale |
+| `lancast_audio_capture` | Linux: `capture/audio_capture_pulse`, macOS: `capture/audio_capture_mac.mm` | lancast_core, PulseAudio/lancast_capture |
 | `lancast_encode` | `encode/video_encoder, audio_encoder` | lancast_core, avcodec, swresample |
 | `lancast_decode` | `decode/video_decoder, audio_decoder` | lancast_core, avcodec, swresample |
 | `lancast_render` | `render/sdl_renderer` | lancast_core, SDL3 |
@@ -79,7 +92,7 @@ Tests in `tests/CMakeLists.txt` link to the relevant library + `GTest::gtest_mai
 ### Key Modules
 
 - **`core/`** — Shared types (`RawVideoFrame`, `RawAudioFrame`, `EncodedPacket`, `StreamConfig` in `types.h`), lock-free SPSC `RingBuffer` (capture->encode hot path), `ThreadSafeQueue` (mutex+condvar MPSC), logger, clock/PTS. RAII smart pointers for FFmpeg types in `ffmpeg_ptrs.h` (`AVCodecContextPtr`, `AVFramePtr`, `AVPacketPtr`, `SwrContextPtr` with factory functions `make_codec_context()`, `make_frame()`, `make_packet()`, `make_swr_context()`)
-- **`capture/`** — `ICaptureSource` interface (`capture_source.h`) with platform backends. X11 XShm captures BGRA32 via shared memory, converted to YUV420p via `sws_scale`. PulseAudio monitor captures system audio at 48kHz stereo float32. Supports per-window capture via window ID.
+- **`capture/`** — `ICaptureSource` interface (`capture_source.h`) and `IAudioCapture` interface (`audio_capture.h`) with platform backends. Linux: X11 XShm captures BGRA32 via shared memory + PulseAudio monitor for audio. macOS: ScreenCaptureKit (`screen_capture_mac.mm`, `audio_capture_mac.mm`) with shared `SCStreamManager` for combined screen+audio capture. Both convert to YUV420p via `sws_scale`. Supports per-window capture via window ID.
 - **`encode/`** — FFmpeg libx264 (`ultrafast`/`zerolatency`, default 6 Mbps CBR, GOP 60, no B-frames, 4 threads) and libopus encoder
 - **`decode/`** — FFmpeg H.264 and Opus decoders
 - **`net/`** — Custom UDP protocol (version 2). 16-byte packed header: `Magic(1) | Version(1) | Type(1) | Flags(1) | Sequence(2) | Timestamp_us(4) | FrameID(2) | FragIdx(2) | FragTotal(2)`. Packet fragmenter splits frames into <=1184 byte chunks. Keyframes are NACK-reliable; P-frames and audio are best-effort. Connection flow: HELLO -> WELCOME (with stream config) -> STREAM_CONFIG (SPS/PPS) -> IDR keyframe
@@ -88,9 +101,11 @@ Tests in `tests/CMakeLists.txt` link to the relevant library + `GTest::gtest_mai
 
 ### Gotchas
 
-- X11's `X.h` defines `None` as `0L`, conflicting with `LaunchMode::None`. Use `#undef None` after including X11 headers when needed.
+- X11's `X.h` defines `None` as `0L`, conflicting with `LaunchMode::None`. Use `#undef None` after including X11 headers when needed (Linux only).
 - FFmpeg headers must be included inside `extern "C" {}` blocks.
-- Platform-specific compile definitions (`LANCAST_PLATFORM_LINUX`, etc.) are set in `cmake/PlatformSetup.cmake`.
+- Platform-specific compile definitions (`LANCAST_PLATFORM_LINUX`, `LANCAST_PLATFORM_MACOS`, etc.) are set in `cmake/PlatformSetup.cmake`.
+- macOS ScreenCaptureKit requires macOS 12.3+. Screen recording permission must be granted in System Settings > Privacy & Security > Screen Recording.
+- macOS capture uses a shared `SCStreamManager` — `ScreenCaptureMac` owns it, `AudioCaptureMac` holds a reference. Both video and audio come from the same `SCStream`.
 
 ## Implementation Phases
 

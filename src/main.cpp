@@ -3,8 +3,14 @@
 #include "app/host_session.h"
 #include "app/client_session.h"
 #include "app/launcher_ui.h"
+
+#if defined(LANCAST_PLATFORM_LINUX)
 #include "capture/screen_capture_x11.h"
 #undef None  // X11/X.h defines None as 0L, conflicts with LaunchMode::None
+#elif defined(LANCAST_PLATFORM_MACOS)
+#include "capture/screen_capture_mac.h"
+#endif
+
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -69,12 +75,31 @@ static int run_client(const std::string& ip, uint16_t port) {
     return 0;
 }
 
+static void list_windows_and_exit() {
+#if defined(LANCAST_PLATFORM_LINUX)
+    auto windows = ScreenCaptureX11::list_windows();
+#elif defined(LANCAST_PLATFORM_MACOS)
+    auto windows = ScreenCaptureMac::list_windows();
+#else
+    std::vector<WindowInfo> windows;
+#endif
+    if (windows.empty()) {
+        printf("No windows found.\n");
+    } else {
+        printf("%-12s %-10s %s\n", "Window ID", "Size", "Title");
+        printf("%-12s %-10s %s\n", "---------", "----", "-----");
+        for (const auto& w : windows) {
+            printf("0x%-10lx %ux%-7u %s\n", w.id, w.width, w.height, w.title.c_str());
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
     bool host_mode = false;
-    bool list_windows = false;
+    bool do_list_windows = false;
     std::string client_ip;
     uint16_t port = DEFAULT_PORT;
     uint32_t fps = 30;
@@ -102,7 +127,7 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
             window_id = strtoul(argv[++i], nullptr, 0);
         } else if (strcmp(argv[i], "--list-windows") == 0) {
-            list_windows = true;
+            do_list_windows = true;
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             Logger::set_level(LogLevel::Debug);
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -115,17 +140,8 @@ int main(int argc, char* argv[]) {
     }
 
     // --list-windows: print and exit
-    if (list_windows) {
-        auto windows = ScreenCaptureX11::list_windows();
-        if (windows.empty()) {
-            printf("No windows found.\n");
-        } else {
-            printf("%-12s %-10s %s\n", "Window ID", "Size", "Title");
-            printf("%-12s %-10s %s\n", "---------", "----", "-----");
-            for (const auto& w : windows) {
-                printf("0x%-10lx %ux%-7u %s\n", w.id, w.width, w.height, w.title.c_str());
-            }
-        }
+    if (do_list_windows) {
+        list_windows_and_exit();
         return 0;
     }
 

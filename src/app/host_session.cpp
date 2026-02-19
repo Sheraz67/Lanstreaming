@@ -1,7 +1,14 @@
 #include "app/host_session.h"
-#include "capture/screen_capture_x11.h"
 #include "core/clock.h"
 #include "core/logger.h"
+
+#if defined(LANCAST_PLATFORM_LINUX)
+#include "capture/screen_capture_x11.h"
+#include "capture/audio_capture_pulse.h"
+#elif defined(LANCAST_PLATFORM_MACOS)
+#include "capture/screen_capture_mac.h"
+#include "capture/audio_capture_mac.h"
+#endif
 
 namespace lancast {
 
@@ -19,8 +26,12 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
     target_bitrate_ = bitrate;
     current_bitrate_ = bitrate;
 
-    // Initialize screen capture
+    // Initialize screen capture (platform-specific)
+#if defined(LANCAST_PLATFORM_LINUX)
     capture_ = std::make_unique<ScreenCaptureX11>();
+#elif defined(LANCAST_PLATFORM_MACOS)
+    capture_ = std::make_unique<ScreenCaptureMac>();
+#endif
     if (!capture_->init(width, height, window_id)) {
         LOG_ERROR(TAG, "Failed to initialize screen capture");
         return false;
@@ -37,8 +48,19 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
         return false;
     }
 
-    // Initialize audio capture
+    // Initialize audio capture (platform-specific)
+#if defined(LANCAST_PLATFORM_LINUX)
     audio_capture_ = std::make_unique<AudioCapturePulse>();
+#elif defined(LANCAST_PLATFORM_MACOS)
+    {
+        auto mac_audio = std::make_unique<AudioCaptureMac>();
+        auto* mac_capture = dynamic_cast<ScreenCaptureMac*>(capture_.get());
+        if (mac_capture) {
+            mac_audio->set_stream_manager(mac_capture->stream_manager());
+        }
+        audio_capture_ = std::move(mac_audio);
+    }
+#endif
     if (!audio_capture_->init(48000, 2)) {
         LOG_WARN(TAG, "Failed to initialize audio capture — continuing without audio");
         audio_capture_.reset();

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "capture/capture_source.h"
-#include "capture/audio_capture_pulse.h"
+#include "capture/audio_capture.h"
 #include "encode/video_encoder.h"
 #include "encode/audio_encoder.h"
 #include "net/server.h"
@@ -37,7 +37,7 @@ private:
 
     std::unique_ptr<ICaptureSource> capture_;
     std::unique_ptr<VideoEncoder> encoder_;
-    std::unique_ptr<AudioCapturePulse> audio_capture_;
+    std::unique_ptr<IAudioCapture> audio_capture_;
     std::unique_ptr<AudioEncoder> audio_encoder_;
     std::unique_ptr<Server> server_;
 

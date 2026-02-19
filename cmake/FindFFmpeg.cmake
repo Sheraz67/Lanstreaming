@@ -3,14 +3,26 @@
 
 include(FindPackageHandleStandardArgs)
 
+# Homebrew hints for macOS (Apple Silicon and Intel)
+set(_ffmpeg_hints "")
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    list(APPEND _ffmpeg_hints /opt/homebrew /usr/local)
+endif()
+
 set(_ffmpeg_components avcodec avformat avutil swscale swresample)
 
 foreach(_comp ${_ffmpeg_components})
     find_path(${_comp}_INCLUDE_DIR
         NAMES lib${_comp}/${_comp}.h
         PATH_SUFFIXES ffmpeg
+        HINTS ${_ffmpeg_hints}
+        PATH_SUFFIXES include
     )
-    find_library(${_comp}_LIBRARY NAMES ${_comp})
+    find_library(${_comp}_LIBRARY
+        NAMES ${_comp}
+        HINTS ${_ffmpeg_hints}
+        PATH_SUFFIXES lib
+    )
 
     if(${_comp}_INCLUDE_DIR AND ${_comp}_LIBRARY)
         set(${_comp}_FOUND TRUE)

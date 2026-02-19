@@ -1,6 +1,12 @@
 #include "app/launcher_ui.h"
+
+#if defined(LANCAST_PLATFORM_LINUX)
 #include "capture/screen_capture_x11.h"
 #undef None  // X11/X.h defines None as 0L, conflicts with LaunchMode::None
+#elif defined(LANCAST_PLATFORM_MACOS)
+#include "capture/screen_capture_mac.h"
+#endif
+
 #include "core/logger.h"
 
 #include <SDL3/SDL.h>
@@ -82,7 +88,11 @@ LaunchConfig LauncherUI::run() {
                             }
                         } else if (selected_ == 0) {
                             // Host selected — show window picker
+#if defined(LANCAST_PLATFORM_LINUX)
                             windows_ = ScreenCaptureX11::list_windows();
+#elif defined(LANCAST_PLATFORM_MACOS)
+                            windows_ = ScreenCaptureMac::list_windows();
+#endif
                             window_selected_ = 0;
                             window_scroll_ = 0;
                             window_select_ = true;

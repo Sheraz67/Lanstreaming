@@ -57,29 +57,54 @@ add_library(lancast_net STATIC
 target_include_directories(lancast_net PUBLIC src)
 target_link_libraries(lancast_net PUBLIC lancast_core)
 
-# --- Capture library ---
-add_library(lancast_capture STATIC
-    src/capture/screen_capture_x11.cpp
-)
-target_include_directories(lancast_capture PUBLIC src)
-target_link_libraries(lancast_capture PUBLIC
-    lancast_core
-    X11::X11
-    X11::Xext
-    FFmpeg::swscale
-    FFmpeg::avutil
-)
+# --- Capture library (platform-specific) ---
+if(LANCAST_PLATFORM_LINUX)
+    add_library(lancast_capture STATIC
+        src/capture/screen_capture_x11.cpp
+    )
+    target_include_directories(lancast_capture PUBLIC src)
+    target_link_libraries(lancast_capture PUBLIC
+        lancast_core
+        X11::X11
+        X11::Xext
+        FFmpeg::swscale
+        FFmpeg::avutil
+    )
 
-# --- Audio Capture library ---
-add_library(lancast_audio_capture STATIC
-    src/capture/audio_capture_pulse.cpp
-)
-target_include_directories(lancast_audio_capture PUBLIC src ${PULSEAUDIO_INCLUDE_DIRS} ${PULSEAUDIO_SIMPLE_INCLUDE_DIRS})
-target_link_libraries(lancast_audio_capture PUBLIC
-    lancast_core
-    ${PULSEAUDIO_LIBRARIES}
-    ${PULSEAUDIO_SIMPLE_LIBRARIES}
-)
+    add_library(lancast_audio_capture STATIC
+        src/capture/audio_capture_pulse.cpp
+    )
+    target_include_directories(lancast_audio_capture PUBLIC src ${PULSEAUDIO_INCLUDE_DIRS} ${PULSEAUDIO_SIMPLE_INCLUDE_DIRS})
+    target_link_libraries(lancast_audio_capture PUBLIC
+        lancast_core
+        ${PULSEAUDIO_LIBRARIES}
+        ${PULSEAUDIO_SIMPLE_LIBRARIES}
+    )
+elseif(LANCAST_PLATFORM_MACOS)
+    add_library(lancast_capture STATIC
+        src/capture/screen_capture_mac.mm
+    )
+    target_include_directories(lancast_capture PUBLIC src)
+    target_link_libraries(lancast_capture PUBLIC
+        lancast_core
+        FFmpeg::swscale
+        FFmpeg::avutil
+        ${SCREENCAPTUREKIT_FRAMEWORK}
+        ${COREMEDIA_FRAMEWORK}
+        ${COREVIDEO_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+        ${COREGRAPHICS_FRAMEWORK}
+    )
+
+    add_library(lancast_audio_capture STATIC
+        src/capture/audio_capture_mac.mm
+    )
+    target_include_directories(lancast_audio_capture PUBLIC src)
+    target_link_libraries(lancast_audio_capture PUBLIC
+        lancast_core
+        lancast_capture
+    )
+endif()
 
 # --- Render library ---
 add_library(lancast_render STATIC

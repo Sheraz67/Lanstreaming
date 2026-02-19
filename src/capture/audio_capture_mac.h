@@ -1,24 +1,28 @@
 #pragma once
 
 #include "capture/audio_capture.h"
+#include <memory>
 #include <cstdint>
 #include <optional>
 
-struct pa_simple;
-
 namespace lancast {
 
-class AudioCapturePulse : public IAudioCapture {
+class SCStreamManager;
+
+class AudioCaptureMac : public IAudioCapture {
 public:
-    AudioCapturePulse() = default;
-    ~AudioCapturePulse() override;
+    AudioCaptureMac() = default;
+    ~AudioCaptureMac() override;
+
+    // Set the shared stream manager (must be called before init)
+    void set_stream_manager(std::shared_ptr<SCStreamManager> manager);
 
     bool init(uint32_t sample_rate, uint16_t channels) override;
     std::optional<RawAudioFrame> capture_frame() override;
     void shutdown() override;
 
 private:
-    pa_simple* pa_ = nullptr;
+    std::shared_ptr<SCStreamManager> manager_;
     uint32_t sample_rate_ = 48000;
     uint16_t channels_ = 2;
     uint32_t frame_samples_ = 960; // 20ms at 48kHz

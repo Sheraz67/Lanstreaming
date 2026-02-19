@@ -1,6 +1,8 @@
 build/
 build-appimage/
+build-dmg/
 *.AppImage
+*.dmg
 .cache/
 compile_commands.json
 *.swp

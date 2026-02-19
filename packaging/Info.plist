@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Lancast</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>Lancast</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.lancast.app</string>
+
+    <key>CFBundleVersion</key>
+    <string>VERSION_PLACEHOLDER</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>VERSION_PLACEHOLDER</string>
+
+    <key>CFBundleExecutable</key>
+    <string>lancast</string>
+
+    <key>CFBundleIconFile</key>
+    <string>lancast</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <key>LSMinimumSystemVersion</key>
+    <string>12.3</string>
+
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.video</string>
+
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Lancast needs screen recording access to capture and stream your screen.</string>
+
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Lancast needs microphone access to capture system audio for streaming.</string>
+</dict>
+</plist>
