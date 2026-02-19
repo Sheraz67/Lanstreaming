@@ -49,7 +49,7 @@ static constexpr const char* TAG = "ScreenCaptureMac";
     return self;
 }
 
-- (void)dealloc {
+- (void)cleanup {
     if (_swsCtx) {
         sws_freeContext(_swsCtx);
         _swsCtx = nullptr;
@@ -352,6 +352,7 @@ void SCStreamManager::stop() {
     }
 
     if (delegate_) {
+        [(LancastStreamDelegate*)delegate_ cleanup];
         [(LancastStreamDelegate*)delegate_ setManager:nullptr];
         delegate_ = nil;
     }
@@ -456,7 +457,7 @@ void ScreenCaptureMac::shutdown() {
 }
 
 std::vector<WindowInfo> ScreenCaptureMac::list_windows() {
-    std::vector<WindowInfo> result;
+    __block std::vector<WindowInfo> result;
 
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
