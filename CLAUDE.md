@@ -10,14 +10,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Install dependencies (Linux)
-apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libx11-dev libxext-dev libpulse-dev
+sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libx11-dev libxext-dev libpulse-dev
 
 # Configure and build
 cmake -B build && cmake --build build
 
-# Run
-./build/lancast --host                    # Start as server on port 7878
-./build/lancast --client 192.168.x.x     # Connect to host
+# Run (three modes)
+./build/lancast                              # Launch SDL3 UI (host/join dialog)
+./build/lancast --host                       # Start as server on port 7878
+./build/lancast --client 192.168.x.x         # Connect to host
+
+# Host options
+./build/lancast --host --port 9000 --fps 60 --bitrate 8000000 --resolution 1920x1080
+./build/lancast --host --window 0x1234567    # Capture specific window
+./build/lancast --list-windows               # List capturable windows
+./build/lancast -v                           # Verbose/debug logging
 
 # Run all tests
 ctest --test-dir build
@@ -27,46 +34,67 @@ ctest --test-dir build -R test_ring_buffer
 
 # Build with verbose output (useful for debugging compile errors)
 cmake --build build --verbose
+
+# Build AppImage
+bash packaging/build-appimage.sh
 ```
 
-SDL3 and GoogleTest 1.14+ are fetched via CMake FetchContent. Requires CMake 3.21+ and C++20.
+SDL3 and GoogleTest 1.15+ are fetched via CMake FetchContent. Requires CMake 3.21+ and C++20.
 
 ## Architecture
 
-### Host Pipeline (5 threads)
+All code is in the `lancast` namespace.
+
+### Host Pipeline (6 threads)
 ```
-X11 XShm capture -> [queue] -> VideoEncoder(H.264) -> [queue] -> UDP Server
-PulseAudio mon   -> [queue] -> AudioEncoder(Opus)  -> [queue] ----^
+X11 XShm capture -> [RingBuffer] -> VideoEncoder(H.264) -> [RingBuffer] -> UDP Server
+PulseAudio mon   -> [TSQueue]    -> AudioEncoder(Opus)  -> [TSQueue]   ----^
+                                                         Server poll thread (NACK/keyframe requests)
 ```
 
-### Client Pipeline (4 threads + SDL audio thread)
+### Client Pipeline (3 threads + main thread SDL render loop + SDL audio callback)
 ```
-UDP recv -> PacketAssembler -> [queue] -> VideoDecoder -> [queue] -> SDL3 Renderer
-                            -> [queue] -> AudioDecoder -> [queue] -> SDL3 Audio
-                                                                  -> A/V Sync
+UDP recv -> PacketAssembler -> [TSQueue] -> VideoDecoder -> [TSQueue] -> SDL3 Renderer (main thread)
+                            -> [TSQueue] -> AudioDecoder -> SDL3 Audio callback
 ```
+
+### CMake Library Targets
+
+When adding new source files, add them to the appropriate static library target in `CMakeLists.txt`:
+
+| Target | Sources | Links to |
+|--------|---------|----------|
+| `lancast_core` | `core/logger.cpp` + headers | FFmpeg libs |
+| `lancast_net` | `net/socket, packet_fragmenter, packet_assembler, server, client` | lancast_core |
+| `lancast_capture` | `capture/screen_capture_x11` | lancast_core, X11, swscale |
+| `lancast_audio_capture` | `capture/audio_capture_pulse` | lancast_core, PulseAudio |
+| `lancast_encode` | `encode/video_encoder, audio_encoder` | lancast_core, avcodec, swresample |
+| `lancast_decode` | `decode/video_decoder, audio_decoder` | lancast_core, avcodec, swresample |
+| `lancast_render` | `render/sdl_renderer` | lancast_core, SDL3 |
+| `lancast_audio_render` | `render/audio_player` | lancast_core, SDL3 |
+| `lancast_app` | `app/host_session, client_session, launcher_ui` | all above |
+
+Tests in `tests/CMakeLists.txt` link to the relevant library + `GTest::gtest_main`.
 
 ### Key Modules
 
-- **`core/`** — Shared types (`RawVideoFrame`, `EncodedPacket`, `StreamConfig`), lock-free SPSC ring buffer (capture->encode hot path), thread-safe MPSC queue (mutex+condvar), logger, clock/PTS
-- **`capture/`** — `ICaptureSource` interface with platform backends. X11 XShm captures BGRA32 via shared memory, converted to YUV420p via `sws_scale`. PulseAudio monitor captures system audio at 48kHz stereo float32
-- **`encode/`** — FFmpeg libx264 (`ultrafast`/`zerolatency`, 4-8 Mbps CBR, GOP 60, no B-frames, 4 threads) and libopus encoder
+- **`core/`** — Shared types (`RawVideoFrame`, `RawAudioFrame`, `EncodedPacket`, `StreamConfig` in `types.h`), lock-free SPSC `RingBuffer` (capture->encode hot path), `ThreadSafeQueue` (mutex+condvar MPSC), logger, clock/PTS. RAII smart pointers for FFmpeg types in `ffmpeg_ptrs.h` (`AVCodecContextPtr`, `AVFramePtr`, `AVPacketPtr`, `SwrContextPtr` with factory functions `make_codec_context()`, `make_frame()`, `make_packet()`, `make_swr_context()`)
+- **`capture/`** — `ICaptureSource` interface (`capture_source.h`) with platform backends. X11 XShm captures BGRA32 via shared memory, converted to YUV420p via `sws_scale`. PulseAudio monitor captures system audio at 48kHz stereo float32. Supports per-window capture via window ID.
+- **`encode/`** — FFmpeg libx264 (`ultrafast`/`zerolatency`, default 6 Mbps CBR, GOP 60, no B-frames, 4 threads) and libopus encoder
 - **`decode/`** — FFmpeg H.264 and Opus decoders
-- **`net/`** — Custom 16-byte UDP packet header protocol. Packet fragmenter splits frames into <=1184 byte chunks. Keyframes are NACK-reliable; P-frames and audio are best-effort. Connection flow: HELLO -> WELCOME (with SPS/PPS) -> IDR keyframe
+- **`net/`** — Custom UDP protocol (version 2). 16-byte packed header: `Magic(1) | Version(1) | Type(1) | Flags(1) | Sequence(2) | Timestamp_us(4) | FrameID(2) | FragIdx(2) | FragTotal(2)`. Packet fragmenter splits frames into <=1184 byte chunks. Keyframes are NACK-reliable; P-frames and audio are best-effort. Connection flow: HELLO -> WELCOME (with stream config) -> STREAM_CONFIG (SPS/PPS) -> IDR keyframe
 - **`render/`** — SDL3 YUV420p texture streaming and SDL3 audio playback
-- **`sync/`** — Audio-master A/V synchronization
-- **`app/`** — `HostSession` and `ClientSession` orchestrators, SDL3 UI (host/join dialog)
+- **`app/`** — `HostSession` and `ClientSession` orchestrators, `LauncherUI` SDL3 host/join dialog with window picker
 
-### Design Patterns
+### Gotchas
 
-- RAII wrappers with custom deleters for FFmpeg types (AVCodecContext, AVFrame, AVPacket)
-- Lock-free SPSC ring buffer for the capture->encode hot path; mutex+condvar MPSC queues elsewhere
-- `ICaptureSource` abstract interface + platform factory for compile-time backend selection
-- C++20: `std::jthread`, `std::atomic`, structured bindings
+- X11's `X.h` defines `None` as `0L`, conflicting with `LaunchMode::None`. Use `#undef None` after including X11 headers when needed.
+- FFmpeg headers must be included inside `extern "C" {}` blocks.
+- Platform-specific compile definitions (`LANCAST_PLATFORM_LINUX`, etc.) are set in `cmake/PlatformSetup.cmake`.
 
 ## Implementation Phases
 
-The project follows 7 phases defined in `lancast-plan.md`. Phases 1-5 are Linux, Phase 6 is Windows, Phase 7 is macOS. Each phase builds on the previous — start with Phase 1 (CMake + core types + UDP protocol + fragmenter/assembler + tests) and work sequentially. Check `lancast-plan.md` for detailed per-phase deliverables.
+The project follows 7 phases defined in `lancast-plan.md`. Phases 1-5 are Linux, Phase 6 is Windows, Phase 7 is macOS. Each phase builds on the previous. Check `lancast-plan.md` for detailed per-phase deliverables.
 
 ## Performance Target
 

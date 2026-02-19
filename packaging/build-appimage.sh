@@ -82,7 +82,7 @@ if [ -z "$APPIMAGE_FILE" ]; then
 fi
 
 if [ -n "$APPIMAGE_FILE" ]; then
-    mv "$APPIMAGE_FILE" "$PROJECT_DIR/"
+    mv -n "$APPIMAGE_FILE" "$PROJECT_DIR/" 2>/dev/null || true
     echo ""
     echo "=== SUCCESS ==="
     echo "AppImage: $PROJECT_DIR/$APPIMAGE_FILE"
