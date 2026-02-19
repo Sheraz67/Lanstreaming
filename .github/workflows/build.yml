@@ -87,11 +87,15 @@ jobs:
           iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/lancast.icns"
 
       - name: Bundle dynamic libraries
+        shell: bash
         run: |
           APP="build/Lancast.app"
           FRAMEWORKS_DIR="$APP/Contents/Frameworks"
           MACOS_DIR="$APP/Contents/MacOS"
           BINARY="$MACOS_DIR/lancast"
+          BUNDLED_LIST="build/.bundled_libs"
+          rm -f "$BUNDLED_LIST"
+          touch "$BUNDLED_LIST"
 
           # Function: get non-system dylib paths from a binary
           get_deps() {
@@ -100,10 +104,8 @@ jobs:
                 /System/*|/usr/lib/*|@executable_path/*|@loader_path/*) continue ;;
                 @rpath/*)
                   rpath_name="${lib#@rpath/}"
-                  # Resolve from SDL3 build dir
                   resolved=$(find build/_deps/sdl3-build -name "$rpath_name" 2>/dev/null | head -1)
                   if [ -n "$resolved" ] && [ -f "$resolved" ]; then echo "$resolved"; continue; fi
-                  # Resolve from Homebrew
                   for prefix in /opt/homebrew/lib /usr/local/lib; do
                     if [ -f "$prefix/$rpath_name" ]; then echo "$prefix/$rpath_name"; break; fi
                   done
@@ -113,23 +115,27 @@ jobs:
             done
           }
 
-          # Track what's already bundled
-          declare -A BUNDLED
-
           bundle_lib() {
             local lib_path="$1"
-            local lib_name=$(basename "$lib_path")
-            [ -n "${BUNDLED[$lib_name]+x}" ] && return
-            [ ! -f "$lib_path" ] && return
+            local lib_name
+            lib_name=$(basename "$lib_path")
 
-            local real_path=$(python3 -c "import os; print(os.path.realpath('$lib_path'))")
+            # Skip if already bundled (use grep on a flat file — Bash 3 compatible)
+            if grep -qx "$lib_name" "$BUNDLED_LIST" 2>/dev/null; then
+              return
+            fi
+            if [ ! -f "$lib_path" ]; then
+              return
+            fi
+
+            local real_path
+            real_path=$(python3 -c "import os; print(os.path.realpath('$lib_path'))")
             cp "$real_path" "$FRAMEWORKS_DIR/$lib_name"
             chmod 644 "$FRAMEWORKS_DIR/$lib_name"
             install_name_tool -id "@executable_path/../Frameworks/$lib_name" "$FRAMEWORKS_DIR/$lib_name"
-            BUNDLED[$lib_name]=1
+            echo "$lib_name" >> "$BUNDLED_LIST"
             echo "  Bundled: $lib_name"
 
-            # Recurse into this lib's deps
             for dep in $(get_deps "$FRAMEWORKS_DIR/$lib_name"); do
               bundle_lib "$dep"
             done
@@ -145,10 +151,13 @@ jobs:
           fix_refs() {
             local target="$1"
             otool -L "$target" 2>/dev/null | awk 'NR>1 {print $1}' | while read -r ref; do
-              local ref_name=$(basename "$ref")
+              local ref_name
+              ref_name=$(basename "$ref")
               if [ -f "$FRAMEWORKS_DIR/$ref_name" ]; then
                 local new_ref="@executable_path/../Frameworks/$ref_name"
-                [ "$ref" != "$new_ref" ] && install_name_tool -change "$ref" "$new_ref" "$target" 2>/dev/null || true
+                if [ "$ref" != "$new_ref" ]; then
+                  install_name_tool -change "$ref" "$new_ref" "$target" 2>/dev/null || true
+                fi
               fi
             done
           }
