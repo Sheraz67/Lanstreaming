@@ -107,14 +107,14 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
     last_bitrate_check_ = std::chrono::steady_clock::now();
 
     // Launch threads
-    poll_thread_ = std::jthread([this](std::stop_token st) { server_poll_loop(st); });
-    send_thread_ = std::jthread([this](std::stop_token st) { network_send_loop(st); });
-    encode_thread_ = std::jthread([this](std::stop_token st) { encode_loop(st); });
-    capture_thread_ = std::jthread([this](std::stop_token st) { capture_loop(st); });
+    poll_thread_ = lancast::jthread([this](lancast::stop_token st) { server_poll_loop(st); });
+    send_thread_ = lancast::jthread([this](lancast::stop_token st) { network_send_loop(st); });
+    encode_thread_ = lancast::jthread([this](lancast::stop_token st) { encode_loop(st); });
+    capture_thread_ = lancast::jthread([this](lancast::stop_token st) { capture_loop(st); });
 
     if (audio_capture_ && audio_encoder_) {
-        audio_encode_thread_ = std::jthread([this](std::stop_token st) { audio_encode_loop(st); });
-        audio_capture_thread_ = std::jthread([this](std::stop_token st) { audio_capture_loop(st); });
+        audio_encode_thread_ = lancast::jthread([this](lancast::stop_token st) { audio_encode_loop(st); });
+        audio_capture_thread_ = lancast::jthread([this](lancast::stop_token st) { audio_capture_loop(st); });
     }
 
     return true;
@@ -147,7 +147,7 @@ void HostSession::stop() {
     LOG_INFO(TAG, "Host session stopped");
 }
 
-void HostSession::capture_loop(std::stop_token st) {
+void HostSession::capture_loop(lancast::stop_token st) {
     Clock clock;
     auto frame_interval = std::chrono::microseconds(1'000'000 / fps_);
 
@@ -175,7 +175,7 @@ void HostSession::capture_loop(std::stop_token st) {
     LOG_INFO(TAG, "Capture loop ended");
 }
 
-void HostSession::encode_loop(std::stop_token st) {
+void HostSession::encode_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Encode loop started");
 
     while (!st.stop_requested() && running_->load()) {
@@ -195,7 +195,7 @@ void HostSession::encode_loop(std::stop_token st) {
     LOG_INFO(TAG, "Encode loop ended");
 }
 
-void HostSession::network_send_loop(std::stop_token st) {
+void HostSession::network_send_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Network send loop started");
 
     while (!st.stop_requested() && running_->load()) {
@@ -228,7 +228,7 @@ void HostSession::network_send_loop(std::stop_token st) {
     LOG_INFO(TAG, "Network send loop ended");
 }
 
-void HostSession::server_poll_loop(std::stop_token st) {
+void HostSession::server_poll_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Server poll loop started");
 
     while (!st.stop_requested() && running_->load()) {
@@ -269,7 +269,7 @@ void HostSession::check_adaptive_bitrate() {
     }
 }
 
-void HostSession::audio_capture_loop(std::stop_token st) {
+void HostSession::audio_capture_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Audio capture loop started");
 
     while (!st.stop_requested() && running_->load()) {
@@ -282,7 +282,7 @@ void HostSession::audio_capture_loop(std::stop_token st) {
     LOG_INFO(TAG, "Audio capture loop ended");
 }
 
-void HostSession::audio_encode_loop(std::stop_token st) {
+void HostSession::audio_encode_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Audio encode loop started");
 
     while (!st.stop_requested() && running_->load()) {

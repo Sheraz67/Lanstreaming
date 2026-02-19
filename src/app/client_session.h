@@ -7,9 +7,9 @@
 #include "render/audio_player.h"
 #include "core/thread_safe_queue.h"
 #include "core/types.h"
+#include "core/jthread.h"
 #include <atomic>
 #include <memory>
-#include <thread>
 #include <string>
 
 namespace lancast {
@@ -27,9 +27,9 @@ public:
     void stop();
 
 private:
-    void recv_loop(std::stop_token st);
-    void decode_loop(std::stop_token st);
-    void audio_decode_loop(std::stop_token st);
+    void recv_loop(lancast::stop_token st);
+    void decode_loop(lancast::stop_token st);
+    void audio_decode_loop(lancast::stop_token st);
 
     Client client_;
     std::unique_ptr<VideoDecoder> decoder_;
@@ -42,9 +42,9 @@ private:
     ThreadSafeQueue<RawVideoFrame> decoded_queue_{4};
 
     std::atomic<bool>* running_ = nullptr;
-    std::jthread recv_thread_;
-    std::jthread decode_thread_;
-    std::jthread audio_decode_thread_;
+    lancast::jthread recv_thread_;
+    lancast::jthread decode_thread_;
+    lancast::jthread audio_decode_thread_;
 };
 
 } // namespace lancast

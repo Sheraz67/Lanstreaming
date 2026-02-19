@@ -8,9 +8,9 @@
 #include "core/ring_buffer.h"
 #include "core/thread_safe_queue.h"
 #include "core/types.h"
+#include "core/jthread.h"
 #include <atomic>
 #include <memory>
-#include <thread>
 
 namespace lancast {
 
@@ -26,12 +26,12 @@ public:
     bool is_running() const { return running_ != nullptr && running_->load(); }
 
 private:
-    void capture_loop(std::stop_token st);
-    void encode_loop(std::stop_token st);
-    void network_send_loop(std::stop_token st);
-    void server_poll_loop(std::stop_token st);
-    void audio_capture_loop(std::stop_token st);
-    void audio_encode_loop(std::stop_token st);
+    void capture_loop(lancast::stop_token st);
+    void encode_loop(lancast::stop_token st);
+    void network_send_loop(lancast::stop_token st);
+    void server_poll_loop(lancast::stop_token st);
+    void audio_capture_loop(lancast::stop_token st);
+    void audio_encode_loop(lancast::stop_token st);
 
     void check_adaptive_bitrate();
 
@@ -52,12 +52,12 @@ private:
     uint32_t target_bitrate_ = 6000000;
     uint32_t current_bitrate_ = 6000000;
 
-    std::jthread capture_thread_;
-    std::jthread encode_thread_;
-    std::jthread send_thread_;
-    std::jthread poll_thread_;
-    std::jthread audio_capture_thread_;
-    std::jthread audio_encode_thread_;
+    lancast::jthread capture_thread_;
+    lancast::jthread encode_thread_;
+    lancast::jthread send_thread_;
+    lancast::jthread poll_thread_;
+    lancast::jthread audio_capture_thread_;
+    lancast::jthread audio_encode_thread_;
 
     // Adaptive bitrate timing
     std::chrono::steady_clock::time_point last_bitrate_check_;

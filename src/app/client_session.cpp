@@ -62,11 +62,11 @@ void ClientSession::run(std::atomic<bool>& running) {
     }
 
     // Start receive and decode threads
-    recv_thread_ = std::jthread([this](std::stop_token st) { recv_loop(st); });
-    decode_thread_ = std::jthread([this](std::stop_token st) { decode_loop(st); });
+    recv_thread_ = lancast::jthread([this](lancast::stop_token st) { recv_loop(st); });
+    decode_thread_ = lancast::jthread([this](lancast::stop_token st) { decode_loop(st); });
 
     if (audio_decoder_ && audio_player_) {
-        audio_decode_thread_ = std::jthread([this](std::stop_token st) { audio_decode_loop(st); });
+        audio_decode_thread_ = lancast::jthread([this](lancast::stop_token st) { audio_decode_loop(st); });
     }
 
     // Request a keyframe so we start cleanly
@@ -130,7 +130,7 @@ void ClientSession::stop() {
     LOG_INFO(TAG, "Client session stopped");
 }
 
-void ClientSession::recv_loop(std::stop_token st) {
+void ClientSession::recv_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Receive loop started");
 
     while (!st.stop_requested() && running_->load() && client_.is_connected()) {
@@ -140,7 +140,7 @@ void ClientSession::recv_loop(std::stop_token st) {
     LOG_INFO(TAG, "Receive loop ended");
 }
 
-void ClientSession::decode_loop(std::stop_token st) {
+void ClientSession::decode_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Decode loop started");
 
     while (!st.stop_requested() && running_->load()) {
@@ -156,7 +156,7 @@ void ClientSession::decode_loop(std::stop_token st) {
     LOG_INFO(TAG, "Decode loop ended");
 }
 
-void ClientSession::audio_decode_loop(std::stop_token st) {
+void ClientSession::audio_decode_loop(lancast::stop_token st) {
     LOG_INFO(TAG, "Audio decode loop started");
 
     while (!st.stop_requested() && running_->load()) {
