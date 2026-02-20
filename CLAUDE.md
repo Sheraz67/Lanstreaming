@@ -99,6 +99,18 @@ Tests in `tests/CMakeLists.txt` link to the relevant library + `GTest::gtest_mai
 - **`render/`** — SDL3 YUV420p texture streaming and SDL3 audio playback
 - **`app/`** — `HostSession` and `ClientSession` orchestrators, `LauncherUI` SDL3 host/join dialog with window picker
 
+### Threading
+
+All threads use `lancast::jthread` and `lancast::stop_token` (defined in `core/jthread.h`), which is a polyfill for `std::jthread` on Apple Clang where libc++ doesn't provide it. Always use `lancast::jthread`/`lancast::stop_token` instead of `std::jthread`/`std::stop_token`.
+
+### Adding Tests
+
+Tests live in `tests/`. Each test is a separate executable linked to the relevant library + `GTest::gtest_main`. To add a new test, add the executable/link/add_test block in `tests/CMakeLists.txt`. Test names use `test_` prefix (e.g., `test_ring_buffer`).
+
+### CI
+
+GitHub Actions (`.github/workflows/build.yml`) runs on push/PR to main: Linux (ubuntu-24.04) builds, runs tests, and produces an AppImage; macOS (macos-14, Apple Silicon) builds and produces a DMG. Tagged pushes (`v*`) create GitHub releases with both artifacts.
+
 ### Gotchas
 
 - X11's `X.h` defines `None` as `0L`, conflicting with `LaunchMode::None`. Use `#undef None` after including X11 headers when needed (Linux only).
@@ -106,6 +118,7 @@ Tests in `tests/CMakeLists.txt` link to the relevant library + `GTest::gtest_mai
 - Platform-specific compile definitions (`LANCAST_PLATFORM_LINUX`, `LANCAST_PLATFORM_MACOS`, etc.) are set in `cmake/PlatformSetup.cmake`.
 - macOS ScreenCaptureKit requires macOS 12.3+. Screen recording permission must be granted in System Settings > Privacy & Security > Screen Recording.
 - macOS capture uses a shared `SCStreamManager` — `ScreenCaptureMac` owns it, `AudioCaptureMac` holds a reference. Both video and audio come from the same `SCStream`.
+- `RingBuffer` capacity must be a power of 2 (enforced by static_assert).
 
 ## Implementation Phases
 
