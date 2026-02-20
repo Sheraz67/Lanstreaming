@@ -127,6 +127,16 @@ void Client::poll(ThreadSafeQueue<EncodedPacket>& video_queue,
     assembler_.purge_stale();
 }
 
+void Client::send_audio(const EncodedPacket& packet) {
+    if (state_.load() != ConnectionState::Connected) return;
+
+    auto fragments = fragmenter_.fragment(packet, mic_sequence_);
+    for (const auto& frag : fragments) {
+        auto data = frag.serialize();
+        socket_.send_to(data, server_);
+    }
+}
+
 void Client::request_keyframe() {
     Packet req;
     req.header.magic = PROTOCOL_MAGIC;

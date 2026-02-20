@@ -93,9 +93,18 @@ void Server::poll() {
         case PacketType::NACK:
             handle_nack(packet, result->source);
             break;
+        case PacketType::CLIENT_AUDIO_DATA: {
+            auto frame = client_audio_assembler_.feed(packet);
+            if (frame && client_audio_cb_) {
+                client_audio_cb_(std::move(*frame));
+            }
+            break;
+        }
         default:
             break;
     }
+
+    client_audio_assembler_.purge_stale();
 }
 
 size_t Server::client_count() const {

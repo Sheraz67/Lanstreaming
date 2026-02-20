@@ -1,6 +1,10 @@
 #include "app/client_session.h"
 #include "core/logger.h"
 
+#if defined(LANCAST_PLATFORM_LINUX)
+#include "capture/mic_capture_pulse.h"
+#endif
+
 #include <chrono>
 
 namespace lancast {
@@ -61,6 +65,39 @@ void ClientSession::run(std::atomic<bool>& running) {
         }
     }
 
+    // Initialize mic capture (Linux only)
+#if defined(LANCAST_PLATFORM_LINUX)
+    mic_capture_ = std::make_unique<MicCapturePulse>();
+    if (!mic_capture_->init(48000, 2)) {
+        LOG_WARN(TAG, "Failed to initialize mic capture — continuing without mic");
+        mic_capture_.reset();
+    }
+
+    if (mic_capture_) {
+        mic_encoder_ = std::make_unique<AudioEncoder>();
+        if (!mic_encoder_->init(48000, 2, 64000)) {
+            LOG_WARN(TAG, "Failed to initialize mic encoder — continuing without mic");
+            mic_capture_->shutdown();
+            mic_capture_.reset();
+            mic_encoder_.reset();
+        }
+    }
+#endif
+
+    // Set up mute toggle key callback ('M' key)
+    renderer_.set_key_callback([this](uint32_t keycode) {
+        if (keycode == 'm') {
+            bool was_muted = mic_muted_.load();
+            mic_muted_.store(!was_muted);
+            const char* status = was_muted ? "MIC ON" : "MIC MUTED";
+            LOG_INFO(TAG, "Mic %s", status);
+            renderer_.set_title(std::string("lancast - viewer [") + status + "]");
+        }
+    });
+
+    // Set initial window title
+    renderer_.set_title("lancast - viewer [MIC MUTED]");
+
     // Start receive and decode threads
     recv_thread_ = lancast::jthread([this](lancast::stop_token st) { recv_loop(st); });
     decode_thread_ = lancast::jthread([this](lancast::stop_token st) { decode_loop(st); });
@@ -69,11 +106,18 @@ void ClientSession::run(std::atomic<bool>& running) {
         audio_decode_thread_ = lancast::jthread([this](lancast::stop_token st) { audio_decode_loop(st); });
     }
 
+    // Start mic capture/encode threads
+    if (mic_capture_ && mic_encoder_) {
+        mic_capture_thread_ = lancast::jthread([this](lancast::stop_token st) { mic_capture_loop(st); });
+        mic_encode_thread_ = lancast::jthread([this](lancast::stop_token st) { mic_encode_loop(st); });
+    }
+
     // Request a keyframe so we start cleanly
     client_.request_keyframe();
 
-    LOG_INFO(TAG, "Render loop started (audio %s)",
-             audio_player_ ? "enabled" : "disabled");
+    LOG_INFO(TAG, "Render loop started (audio %s, mic %s)",
+             audio_player_ ? "enabled" : "disabled",
+             mic_capture_ ? "enabled (muted)" : "disabled");
 
     uint32_t frames_rendered = 0;
 
@@ -107,6 +151,14 @@ void ClientSession::run(std::atomic<bool>& running) {
 }
 
 void ClientSession::stop() {
+    if (mic_capture_thread_.joinable()) {
+        mic_capture_thread_.request_stop();
+        mic_capture_thread_.join();
+    }
+    if (mic_encode_thread_.joinable()) {
+        mic_encode_thread_.request_stop();
+        mic_encode_thread_.join();
+    }
     if (audio_decode_thread_.joinable()) {
         audio_decode_thread_.request_stop();
         audio_decode_thread_.join();
@@ -120,10 +172,14 @@ void ClientSession::stop() {
         decode_thread_.join();
     }
 
+    mic_raw_queue_.close();
+    mic_encoded_queue_.close();
     video_queue_.close();
     audio_queue_.close();
     decoded_queue_.close();
 
+    if (mic_encoder_) mic_encoder_->shutdown();
+    if (mic_capture_) mic_capture_->shutdown();
     if (audio_player_) audio_player_->shutdown();
     if (audio_decoder_) audio_decoder_->shutdown();
     if (decoder_) decoder_->shutdown();
@@ -173,6 +229,39 @@ void ClientSession::audio_decode_loop(lancast::stop_token st) {
     }
 
     LOG_INFO(TAG, "Audio decode loop ended");
+}
+
+void ClientSession::mic_capture_loop(lancast::stop_token st) {
+    LOG_INFO(TAG, "Mic capture loop started");
+
+    while (!st.stop_requested() && running_->load()) {
+        auto frame = mic_capture_->capture_frame();
+        if (frame) {
+            // Always capture to drain PulseAudio buffer (prevents stale burst on unmute)
+            if (!mic_muted_.load()) {
+                mic_raw_queue_.push(std::move(*frame));
+            }
+        }
+    }
+
+    LOG_INFO(TAG, "Mic capture loop ended");
+}
+
+void ClientSession::mic_encode_loop(lancast::stop_token st) {
+    LOG_INFO(TAG, "Mic encode loop started");
+
+    while (!st.stop_requested() && running_->load()) {
+        auto frame = mic_raw_queue_.wait_pop(std::chrono::milliseconds(50));
+        if (frame) {
+            auto encoded = mic_encoder_->encode(*frame);
+            if (encoded) {
+                encoded->type = FrameType::ClientAudio;
+                client_.send_audio(*encoded);
+            }
+        }
+    }
+
+    LOG_INFO(TAG, "Mic encode loop ended");
 }
 
 } // namespace lancast

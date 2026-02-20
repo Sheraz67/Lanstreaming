@@ -4,6 +4,8 @@
 #include "capture/audio_capture.h"
 #include "encode/video_encoder.h"
 #include "encode/audio_encoder.h"
+#include "decode/audio_decoder.h"
+#include "render/audio_player.h"
 #include "net/server.h"
 #include "core/ring_buffer.h"
 #include "core/thread_safe_queue.h"
@@ -32,6 +34,7 @@ private:
     void server_poll_loop(lancast::stop_token st);
     void audio_capture_loop(lancast::stop_token st);
     void audio_encode_loop(lancast::stop_token st);
+    void client_audio_decode_loop(lancast::stop_token st);
 
     void check_adaptive_bitrate();
 
@@ -40,6 +43,11 @@ private:
     std::unique_ptr<IAudioCapture> audio_capture_;
     std::unique_ptr<AudioEncoder> audio_encoder_;
     std::unique_ptr<Server> server_;
+
+    // Client audio playback (mic from client -> host speakers)
+    std::unique_ptr<AudioDecoder> client_audio_decoder_;
+    std::unique_ptr<AudioPlayer> client_audio_player_;
+    ThreadSafeQueue<EncodedPacket> client_audio_queue_{8};
 
     RingBuffer<RawVideoFrame, 4> raw_buffer_;       // capture -> encode
     RingBuffer<EncodedPacket, 4> encoded_buffer_;    // encode -> send
@@ -58,6 +66,7 @@ private:
     lancast::jthread poll_thread_;
     lancast::jthread audio_capture_thread_;
     lancast::jthread audio_encode_thread_;
+    lancast::jthread client_audio_decode_thread_;
 
     // Adaptive bitrate timing
     std::chrono::steady_clock::time_point last_bitrate_check_;

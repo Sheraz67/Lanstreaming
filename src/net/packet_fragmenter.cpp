@@ -25,6 +25,9 @@ std::vector<Packet> PacketFragmenter::fragment(const EncodedPacket& encoded, uin
         case FrameType::Audio:
             ptype = PacketType::AUDIO_DATA;
             break;
+        case FrameType::ClientAudio:
+            ptype = PacketType::CLIENT_AUDIO_DATA;
+            break;
     }
 
     for (size_t i = 0; i < num_frags; ++i) {

@@ -35,6 +35,7 @@ enum class FrameType : uint8_t {
     VideoKeyframe = 0,
     VideoPFrame   = 1,
     Audio         = 2,
+    ClientAudio   = 3,
 };
 
 struct EncodedPacket {

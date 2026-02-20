@@ -101,8 +101,34 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
         return false;
     }
 
-    LOG_INFO(TAG, "Host started: %ux%u @ %u fps, bitrate %u, port %u, audio %s",
-             w, h, fps, bitrate, port, audio_capture_ ? "enabled" : "disabled");
+    // Initialize client audio decoder + player (for receiving mic audio from clients)
+    client_audio_decoder_ = std::make_unique<AudioDecoder>();
+    if (!client_audio_decoder_->init(48000, 2)) {
+        LOG_WARN(TAG, "Failed to initialize client audio decoder — continuing without client mic playback");
+        client_audio_decoder_.reset();
+    }
+
+    if (client_audio_decoder_) {
+        client_audio_player_ = std::make_unique<AudioPlayer>();
+        if (!client_audio_player_->init(48000, 2)) {
+            LOG_WARN(TAG, "Failed to initialize client audio player — continuing without client mic playback");
+            client_audio_decoder_->shutdown();
+            client_audio_decoder_.reset();
+            client_audio_player_.reset();
+        }
+    }
+
+    // Set callback so server dispatches received client audio to our queue
+    if (client_audio_decoder_ && client_audio_player_) {
+        server_->set_client_audio_callback([this](EncodedPacket pkt) {
+            client_audio_queue_.push(std::move(pkt));
+        });
+    }
+
+    LOG_INFO(TAG, "Host started: %ux%u @ %u fps, bitrate %u, port %u, audio %s, client mic playback %s",
+             w, h, fps, bitrate, port,
+             audio_capture_ ? "enabled" : "disabled",
+             client_audio_decoder_ ? "enabled" : "disabled");
 
     last_bitrate_check_ = std::chrono::steady_clock::now();
 
@@ -117,10 +143,15 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
         audio_capture_thread_ = lancast::jthread([this](lancast::stop_token st) { audio_capture_loop(st); });
     }
 
+    if (client_audio_decoder_ && client_audio_player_) {
+        client_audio_decode_thread_ = lancast::jthread([this](lancast::stop_token st) { client_audio_decode_loop(st); });
+    }
+
     return true;
 }
 
 void HostSession::stop() {
+    if (client_audio_decode_thread_.joinable()) client_audio_decode_thread_.request_stop();
     if (audio_capture_thread_.joinable()) audio_capture_thread_.request_stop();
     if (audio_encode_thread_.joinable()) audio_encode_thread_.request_stop();
     if (capture_thread_.joinable()) capture_thread_.request_stop();
@@ -128,9 +159,11 @@ void HostSession::stop() {
     if (send_thread_.joinable()) send_thread_.request_stop();
     if (poll_thread_.joinable()) poll_thread_.request_stop();
 
+    client_audio_queue_.close();
     audio_raw_queue_.close();
     audio_encoded_queue_.close();
 
+    if (client_audio_decode_thread_.joinable()) client_audio_decode_thread_.join();
     if (audio_capture_thread_.joinable()) audio_capture_thread_.join();
     if (audio_encode_thread_.joinable()) audio_encode_thread_.join();
     if (capture_thread_.joinable()) capture_thread_.join();
@@ -139,6 +172,8 @@ void HostSession::stop() {
     if (poll_thread_.joinable()) poll_thread_.join();
 
     if (server_) server_->stop();
+    if (client_audio_player_) client_audio_player_->shutdown();
+    if (client_audio_decoder_) client_audio_decoder_->shutdown();
     if (audio_encoder_) audio_encoder_->shutdown();
     if (audio_capture_) audio_capture_->shutdown();
     if (encoder_) encoder_->shutdown();
@@ -296,6 +331,22 @@ void HostSession::audio_encode_loop(lancast::stop_token st) {
     }
 
     LOG_INFO(TAG, "Audio encode loop ended");
+}
+
+void HostSession::client_audio_decode_loop(lancast::stop_token st) {
+    LOG_INFO(TAG, "Client audio decode loop started");
+
+    while (!st.stop_requested() && running_->load()) {
+        auto packet = client_audio_queue_.wait_pop(std::chrono::milliseconds(50));
+        if (packet) {
+            auto decoded = client_audio_decoder_->decode(*packet);
+            if (decoded) {
+                client_audio_player_->play_frame(*decoded);
+            }
+        }
+    }
+
+    LOG_INFO(TAG, "Client audio decode loop ended");
 }
 
 } // namespace lancast

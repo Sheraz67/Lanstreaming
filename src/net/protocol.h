@@ -17,17 +17,18 @@ static constexpr size_t   HEADER_SIZE      = 16;
 static constexpr size_t   MAX_FRAGMENT_DATA = MAX_UDP_PAYLOAD - HEADER_SIZE; // 1184 bytes
 
 enum class PacketType : uint8_t {
-    VIDEO_DATA    = 0x01,
-    AUDIO_DATA    = 0x02,
-    HELLO         = 0x10,
-    WELCOME       = 0x11,
-    ACK           = 0x12,
-    NACK          = 0x13,
-    KEYFRAME_REQ  = 0x14,
-    PING          = 0x20,
-    PONG          = 0x21,
-    BYE           = 0x30,
-    STREAM_CONFIG = 0x40,
+    VIDEO_DATA        = 0x01,
+    AUDIO_DATA        = 0x02,
+    CLIENT_AUDIO_DATA = 0x03,
+    HELLO             = 0x10,
+    WELCOME           = 0x11,
+    ACK               = 0x12,
+    NACK              = 0x13,
+    KEYFRAME_REQ      = 0x14,
+    PING              = 0x20,
+    PONG              = 0x21,
+    BYE               = 0x30,
+    STREAM_CONFIG     = 0x40,
 };
 
 enum PacketFlags : uint8_t {

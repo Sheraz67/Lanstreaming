@@ -50,7 +50,9 @@ std::optional<EncodedPacket> PacketAssembler::feed(const Packet& packet) {
     result.frame_id = state.frame_id;
     result.pts_us = static_cast<int64_t>(state.timestamp_us);
 
-    if (state.type == PacketType::AUDIO_DATA) {
+    if (state.type == PacketType::CLIENT_AUDIO_DATA) {
+        result.type = FrameType::ClientAudio;
+    } else if (state.type == PacketType::AUDIO_DATA) {
         result.type = FrameType::Audio;
     } else if (state.flags & FLAG_KEYFRAME) {
         result.type = FrameType::VideoKeyframe;

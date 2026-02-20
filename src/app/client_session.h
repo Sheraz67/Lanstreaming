@@ -3,6 +3,8 @@
 #include "net/client.h"
 #include "decode/video_decoder.h"
 #include "decode/audio_decoder.h"
+#include "encode/audio_encoder.h"
+#include "capture/audio_capture.h"
 #include "render/sdl_renderer.h"
 #include "render/audio_player.h"
 #include "core/thread_safe_queue.h"
@@ -30,12 +32,21 @@ private:
     void recv_loop(lancast::stop_token st);
     void decode_loop(lancast::stop_token st);
     void audio_decode_loop(lancast::stop_token st);
+    void mic_capture_loop(lancast::stop_token st);
+    void mic_encode_loop(lancast::stop_token st);
 
     Client client_;
     std::unique_ptr<VideoDecoder> decoder_;
     std::unique_ptr<AudioDecoder> audio_decoder_;
     std::unique_ptr<AudioPlayer> audio_player_;
     SdlRenderer renderer_;
+
+    // Mic capture/encode (client -> host)
+    std::unique_ptr<IAudioCapture> mic_capture_;
+    std::unique_ptr<AudioEncoder> mic_encoder_;
+    ThreadSafeQueue<RawAudioFrame> mic_raw_queue_{8};
+    ThreadSafeQueue<EncodedPacket> mic_encoded_queue_{16};
+    std::atomic<bool> mic_muted_{true}; // Starts muted
 
     ThreadSafeQueue<EncodedPacket> video_queue_{3};
     ThreadSafeQueue<EncodedPacket> audio_queue_{8};
@@ -45,6 +56,8 @@ private:
     lancast::jthread recv_thread_;
     lancast::jthread decode_thread_;
     lancast::jthread audio_decode_thread_;
+    lancast::jthread mic_capture_thread_;
+    lancast::jthread mic_encode_thread_;
 };
 
 } // namespace lancast

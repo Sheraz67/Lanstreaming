@@ -3,6 +3,7 @@
 #include "net/socket.h"
 #include "net/protocol.h"
 #include "net/packet_fragmenter.h"
+#include "net/packet_assembler.h"
 #include "core/types.h"
 #include <vector>
 #include <mutex>
@@ -29,8 +30,11 @@ public:
     // Process incoming packets (call from recv thread)
     void poll();
 
+    using ClientAudioCallback = std::function<void(EncodedPacket)>;
+
     void set_stream_config(const StreamConfig& config) { config_ = config; }
     void set_keyframe_callback(std::function<void()> cb) { keyframe_cb_ = std::move(cb); }
+    void set_client_audio_callback(ClientAudioCallback cb) { client_audio_cb_ = std::move(cb); }
 
     bool is_running() const { return running_.load(); }
     size_t client_count() const;
@@ -67,6 +71,8 @@ private:
     std::atomic<bool> running_{false};
     StreamConfig config_;
     std::function<void()> keyframe_cb_;
+    ClientAudioCallback client_audio_cb_;
+    PacketAssembler client_audio_assembler_;
 
     // Keyframe NACK retransmission cache
     std::mutex keyframe_mutex_;

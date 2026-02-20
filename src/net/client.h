@@ -3,6 +3,7 @@
 #include "net/socket.h"
 #include "net/protocol.h"
 #include "net/packet_assembler.h"
+#include "net/packet_fragmenter.h"
 #include "core/types.h"
 #include "core/thread_safe_queue.h"
 #include <atomic>
@@ -30,6 +31,7 @@ public:
               ThreadSafeQueue<EncodedPacket>& audio_queue);
 
     void request_keyframe();
+    void send_audio(const EncodedPacket& packet);
 
     bool is_connected() const { return state_.load() == ConnectionState::Connected; }
     ConnectionState state() const { return state_.load(); }
@@ -41,6 +43,8 @@ private:
 
     UdpSocket socket_;
     PacketAssembler assembler_;
+    PacketFragmenter fragmenter_;
+    uint16_t mic_sequence_ = 0;
     Endpoint server_;
     StreamConfig config_;
     std::atomic<ConnectionState> state_{ConnectionState::Disconnected};

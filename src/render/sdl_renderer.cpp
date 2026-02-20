@@ -100,6 +100,9 @@ bool SdlRenderer::poll_events() {
                 if (event.key.key == SDLK_F11) {
                     toggle_fullscreen();
                 }
+                if (key_cb_) {
+                    key_cb_(event.key.key);
+                }
                 break;
             default:
                 break;
@@ -114,6 +117,12 @@ void SdlRenderer::toggle_fullscreen() {
     fullscreen_ = !fullscreen_;
     SDL_SetWindowFullscreen(window_, fullscreen_);
     LOG_INFO(TAG, "Fullscreen %s", fullscreen_ ? "enabled" : "disabled");
+}
+
+void SdlRenderer::set_title(const std::string& title) {
+    if (window_) {
+        SDL_SetWindowTitle(window_, title.c_str());
+    }
 }
 
 void SdlRenderer::shutdown() {

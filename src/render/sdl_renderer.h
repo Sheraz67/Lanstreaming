@@ -2,6 +2,7 @@
 
 #include "core/types.h"
 #include <cstdint>
+#include <functional>
 #include <string>
 
 struct SDL_Window;
@@ -12,6 +13,8 @@ namespace lancast {
 
 class SdlRenderer {
 public:
+    using KeyCallback = std::function<void(uint32_t keycode)>;
+
     SdlRenderer() = default;
     ~SdlRenderer();
 
@@ -21,6 +24,8 @@ public:
     // Returns false if user requested quit (close window or ESC)
     bool poll_events();
     void toggle_fullscreen();
+    void set_key_callback(KeyCallback cb) { key_cb_ = std::move(cb); }
+    void set_title(const std::string& title);
 
     void shutdown();
 
@@ -32,6 +37,7 @@ private:
     uint32_t height_ = 0;
     bool initialized_ = false;
     bool fullscreen_ = false;
+    KeyCallback key_cb_;
 };
 
 } // namespace lancast

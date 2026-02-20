@@ -73,6 +73,7 @@ if(LANCAST_PLATFORM_LINUX)
 
     add_library(lancast_audio_capture STATIC
         src/capture/audio_capture_pulse.cpp
+        src/capture/mic_capture_pulse.cpp
     )
     target_include_directories(lancast_audio_capture PUBLIC src ${PULSEAUDIO_INCLUDE_DIRS} ${PULSEAUDIO_SIMPLE_INCLUDE_DIRS})
     target_link_libraries(lancast_audio_capture PUBLIC
