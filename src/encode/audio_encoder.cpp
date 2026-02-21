@@ -38,6 +38,7 @@ bool AudioEncoder::init(uint32_t sample_rate, uint16_t channels, uint32_t bitrat
     ctx_->sample_fmt = AV_SAMPLE_FMT_FLT; // libopus accepts float32 interleaved
     ctx_->time_base = {1, 48000};
     ctx_->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    ctx_->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 
     av_channel_layout_default(&ctx_->ch_layout, channels);
 
