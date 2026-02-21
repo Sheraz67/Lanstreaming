@@ -22,7 +22,7 @@ public:
     ~HostSession();
 
     bool start(uint16_t port, uint32_t fps, uint32_t bitrate,
-               uint32_t width, uint32_t height, unsigned long window_id,
+               uint32_t width, uint32_t height, uint64_t window_id,
                std::atomic<bool>& running);
     void stop();
     bool is_running() const { return running_ != nullptr && running_->load(); }

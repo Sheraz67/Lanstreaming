@@ -8,6 +8,9 @@
 #elif defined(LANCAST_PLATFORM_MACOS)
 #include "capture/screen_capture_mac.h"
 #include "capture/audio_capture_mac.h"
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+#include "capture/screen_capture_dxgi.h"
+#include "capture/audio_capture_wasapi.h"
 #endif
 
 namespace lancast {
@@ -19,7 +22,7 @@ HostSession::~HostSession() {
 }
 
 bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
-                         uint32_t width, uint32_t height, unsigned long window_id,
+                         uint32_t width, uint32_t height, uint64_t window_id,
                          std::atomic<bool>& running) {
     running_ = &running;
     fps_ = fps;
@@ -31,6 +34,8 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
     capture_ = std::make_unique<ScreenCaptureX11>();
 #elif defined(LANCAST_PLATFORM_MACOS)
     capture_ = std::make_unique<ScreenCaptureMac>();
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+    capture_ = std::make_unique<ScreenCaptureDXGI>();
 #endif
     if (!capture_->init(width, height, window_id)) {
         LOG_ERROR(TAG, "Failed to initialize screen capture");
@@ -60,6 +65,8 @@ bool HostSession::start(uint16_t port, uint32_t fps, uint32_t bitrate,
         }
         audio_capture_ = std::move(mac_audio);
     }
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+    audio_capture_ = std::make_unique<AudioCaptureWASAPI>();
 #endif
     if (!audio_capture_->init(48000, 2)) {
         LOG_WARN(TAG, "Failed to initialize audio capture — continuing without audio");

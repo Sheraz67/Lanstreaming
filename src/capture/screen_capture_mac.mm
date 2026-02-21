@@ -199,7 +199,7 @@ SCStreamManager::~SCStreamManager() {
 }
 
 bool SCStreamManager::start(uint32_t target_width, uint32_t target_height,
-                            unsigned long window_id) {
+                            uint64_t window_id) {
     if (running_) return true;
 
     __block bool success = false;
@@ -231,7 +231,7 @@ bool SCStreamManager::start(uint32_t target_width, uint32_t target_height,
                     }
                 }
                 if (!success) {
-                    LOG_ERROR(TAG, "Window 0x%lx not found", window_id);
+                    LOG_ERROR(TAG, "Window 0x%llx not found", (unsigned long long)window_id);
                 }
             } else {
                 // Capture the main display
@@ -414,7 +414,7 @@ ScreenCaptureMac::~ScreenCaptureMac() {
 }
 
 bool ScreenCaptureMac::init(uint32_t target_width, uint32_t target_height,
-                             unsigned long window_id) {
+                             uint64_t window_id) {
     manager_ = std::make_shared<SCStreamManager>();
     if (!manager_->start(target_width, target_height, window_id)) {
         LOG_ERROR(TAG, "Failed to start SCStreamManager");

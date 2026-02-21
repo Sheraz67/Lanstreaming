@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commit Rules
 
 - Never include `Co-Authored-By` lines in commits.
+- Never push code with any Claude signature or attribution.
 
 ## Project Overview
 
@@ -49,26 +50,29 @@ bash packaging/build-dmg.sh
 # Output: Lancast-0.1.0-macOS.dmg (fully self-contained, no deps for end user)
 ```
 
-SDL3 and GoogleTest 1.15+ are fetched via CMake FetchContent. Requires CMake 3.21+ and C++20.
+SDL3 and GoogleTest 1.15+ are fetched via CMake FetchContent. Requires CMake 3.21+ and C++20. `build/compile_commands.json` is auto-generated for LSP/IDE integration.
 
 ## Architecture
 
 All code is in the `lancast` namespace.
 
-### Host Pipeline (6 threads)
+### Host Pipeline (7 threads)
 ```
 Linux:  X11 XShm capture   -> [RingBuffer] -> VideoEncoder(H.264) -> [RingBuffer] -> UDP Server
         PulseAudio monitor  -> [TSQueue]    -> AudioEncoder(Opus)  -> [TSQueue]   ----^
 
 macOS:  ScreenCaptureKit    -> [RingBuffer] -> VideoEncoder(H.264) -> [RingBuffer] -> UDP Server
         (shared SCStream)   -> [TSQueue]    -> AudioEncoder(Opus)  -> [TSQueue]   ----^
-                                                                  Server poll thread (NACK/keyframe requests)
+
+        Server poll thread (NACK/keyframe requests + adaptive bitrate)
+        Client audio decode thread: UDP recv ClientAudio -> [TSQueue] -> AudioDecoder -> SDL3 Audio playback
 ```
 
 ### Client Pipeline (3 threads + main thread SDL render loop + SDL audio callback)
 ```
 UDP recv -> PacketAssembler -> [TSQueue] -> VideoDecoder -> [TSQueue] -> SDL3 Renderer (main thread)
                             -> [TSQueue] -> AudioDecoder -> SDL3 Audio callback
+        Mic capture (optional) -> AudioEncoder -> UDP send (ClientAudio packets to host)
 ```
 
 ### CMake Library Targets
@@ -80,7 +84,7 @@ When adding new source files, add them to the appropriate static library target 
 | `lancast_core` | `core/logger.cpp` + headers | FFmpeg libs |
 | `lancast_net` | `net/socket, packet_fragmenter, packet_assembler, server, client` | lancast_core |
 | `lancast_capture` | Linux: `capture/screen_capture_x11`, macOS: `capture/screen_capture_mac.mm` | lancast_core, X11/ScreenCaptureKit, swscale |
-| `lancast_audio_capture` | Linux: `capture/audio_capture_pulse`, macOS: `capture/audio_capture_mac.mm` | lancast_core, PulseAudio/lancast_capture |
+| `lancast_audio_capture` | Linux: `capture/audio_capture_pulse, mic_capture_pulse`, macOS: `capture/audio_capture_mac.mm` | lancast_core, PulseAudio/lancast_capture |
 | `lancast_encode` | `encode/video_encoder, audio_encoder` | lancast_core, avcodec, swresample |
 | `lancast_decode` | `decode/video_decoder, audio_decoder` | lancast_core, avcodec, swresample |
 | `lancast_render` | `render/sdl_renderer` | lancast_core, SDL3 |
@@ -97,7 +101,7 @@ Tests in `tests/CMakeLists.txt` link to the relevant library + `GTest::gtest_mai
 - **`decode/`** — FFmpeg H.264 and Opus decoders
 - **`net/`** — Custom UDP protocol (version 2). 16-byte packed header: `Magic(1) | Version(1) | Type(1) | Flags(1) | Sequence(2) | Timestamp_us(4) | FrameID(2) | FragIdx(2) | FragTotal(2)`. Packet fragmenter splits frames into <=1184 byte chunks. Keyframes are NACK-reliable; P-frames and audio are best-effort. Connection flow: HELLO -> WELCOME (with stream config) -> STREAM_CONFIG (SPS/PPS) -> IDR keyframe
 - **`render/`** — SDL3 YUV420p texture streaming and SDL3 audio playback
-- **`app/`** — `HostSession` and `ClientSession` orchestrators, `LauncherUI` SDL3 host/join dialog with window picker
+- **`app/`** — `HostSession` and `ClientSession` orchestrators, `LauncherUI` SDL3 host/join dialog with window picker. `HostSession` includes adaptive bitrate control (adjusts encoder bitrate based on NACK rate) and bidirectional audio (decodes client mic audio for host playback).
 
 ### Threading
 

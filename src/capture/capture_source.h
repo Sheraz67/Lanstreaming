@@ -9,7 +9,7 @@
 namespace lancast {
 
 struct WindowInfo {
-    unsigned long id;       // X11 Window ID
+    uint64_t id;            // Platform window ID (X11 Window, CGWindowID, HWND)
     std::string title;
     uint32_t width;
     uint32_t height;
@@ -20,7 +20,7 @@ public:
     virtual ~ICaptureSource() = default;
 
     virtual bool init(uint32_t target_width, uint32_t target_height,
-                      unsigned long window_id = 0) = 0;
+                      uint64_t window_id = 0) = 0;
     virtual std::optional<RawVideoFrame> capture_frame() = 0;
     virtual void shutdown() = 0;
 

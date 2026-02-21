@@ -5,6 +5,8 @@
 #undef None  // X11/X.h defines None as 0L, conflicts with LaunchMode::None
 #elif defined(LANCAST_PLATFORM_MACOS)
 #include "capture/screen_capture_mac.h"
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+#include "capture/screen_capture_dxgi.h"
 #endif
 
 #include "core/logger.h"
@@ -92,6 +94,8 @@ LaunchConfig LauncherUI::run() {
                             windows_ = ScreenCaptureX11::list_windows();
 #elif defined(LANCAST_PLATFORM_MACOS)
                             windows_ = ScreenCaptureMac::list_windows();
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+                            windows_ = ScreenCaptureDXGI::list_windows();
 #endif
                             window_selected_ = 0;
                             window_scroll_ = 0;

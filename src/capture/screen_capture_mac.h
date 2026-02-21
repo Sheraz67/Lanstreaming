@@ -30,7 +30,7 @@ public:
     ~SCStreamManager();
 
     bool start(uint32_t target_width, uint32_t target_height,
-               unsigned long window_id);
+               uint64_t window_id);
     void stop();
 
     // Called by the delegate when a video frame arrives
@@ -77,7 +77,7 @@ public:
     ~ScreenCaptureMac() override;
 
     bool init(uint32_t target_width, uint32_t target_height,
-              unsigned long window_id = 0) override;
+              uint64_t window_id = 0) override;
     std::optional<RawVideoFrame> capture_frame() override;
     void shutdown() override;
 

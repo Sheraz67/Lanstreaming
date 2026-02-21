@@ -17,7 +17,7 @@ public:
     ~ScreenCaptureX11() override;
 
     bool init(uint32_t target_width, uint32_t target_height,
-              unsigned long window_id = 0) override;
+              uint64_t window_id = 0) override;
     std::optional<RawVideoFrame> capture_frame() override;
     void shutdown() override;
 

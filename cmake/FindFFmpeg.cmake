@@ -3,10 +3,19 @@
 
 include(FindPackageHandleStandardArgs)
 
-# Homebrew hints for macOS (Apple Silicon and Intel)
+# Platform-specific path hints
 set(_ffmpeg_hints "")
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Homebrew hints for macOS (Apple Silicon and Intel)
     list(APPEND _ffmpeg_hints /opt/homebrew /usr/local)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    # vcpkg or manual FFmpeg install
+    if(DEFINED ENV{FFMPEG_ROOT})
+        list(APPEND _ffmpeg_hints $ENV{FFMPEG_ROOT})
+    endif()
+    if(DEFINED VCPKG_INSTALLED_DIR)
+        list(APPEND _ffmpeg_hints "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+    endif()
 endif()
 
 set(_ffmpeg_components avcodec avformat avutil swscale swresample)

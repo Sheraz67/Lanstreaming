@@ -19,7 +19,7 @@ enum class LaunchMode {
 struct LaunchConfig {
     LaunchMode mode = LaunchMode::None;
     std::string host_ip;          // Only set for Client mode
-    unsigned long window_id = 0;  // 0 = full screen
+    uint64_t window_id = 0;      // 0 = full screen
 };
 
 class LauncherUI {

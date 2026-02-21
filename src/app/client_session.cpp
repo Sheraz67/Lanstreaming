@@ -3,6 +3,8 @@
 
 #if defined(LANCAST_PLATFORM_LINUX)
 #include "capture/mic_capture_pulse.h"
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+#include "capture/mic_capture_wasapi.h"
 #endif
 
 #include <chrono>
@@ -65,9 +67,13 @@ void ClientSession::run(std::atomic<bool>& running) {
         }
     }
 
-    // Initialize mic capture (Linux only)
+    // Initialize mic capture
 #if defined(LANCAST_PLATFORM_LINUX)
     mic_capture_ = std::make_unique<MicCapturePulse>();
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+    mic_capture_ = std::make_unique<MicCaptureWASAPI>();
+#endif
+#if defined(LANCAST_PLATFORM_LINUX) || defined(LANCAST_PLATFORM_WINDOWS)
     if (!mic_capture_->init(48000, 2)) {
         LOG_WARN(TAG, "Failed to initialize mic capture — continuing without mic");
         mic_capture_.reset();

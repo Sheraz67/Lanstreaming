@@ -14,7 +14,10 @@ public:
     static LogLevel level();
 
     static void log(LogLevel level, const char* tag, const char* fmt, ...)
-        __attribute__((format(printf, 3, 4)));
+#if defined(__GNUC__) || defined(__clang__)
+        __attribute__((format(printf, 3, 4)))
+#endif
+        ;
 };
 
 #define LOG_DEBUG(tag, ...) ::lancast::Logger::log(::lancast::LogLevel::Debug, tag, __VA_ARGS__)

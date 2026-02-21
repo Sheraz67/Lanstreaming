@@ -9,8 +9,12 @@
 #undef None  // X11/X.h defines None as 0L, conflicts with LaunchMode::None
 #elif defined(LANCAST_PLATFORM_MACOS)
 #include "capture/screen_capture_mac.h"
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+#include "capture/screen_capture_dxgi.h"
+#include "net/winsock_init.h"
 #endif
 
+#include <cinttypes>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -49,7 +53,7 @@ static bool parse_resolution(const char* str, uint32_t& w, uint32_t& h) {
 }
 
 static int run_host(uint16_t port, uint32_t fps, uint32_t bitrate,
-                    uint32_t width, uint32_t height, unsigned long window_id) {
+                    uint32_t width, uint32_t height, uint64_t window_id) {
     HostSession session;
     if (!session.start(port, fps, bitrate, width, height, window_id, g_running)) {
         return 1;
@@ -80,6 +84,8 @@ static void list_windows_and_exit() {
     auto windows = ScreenCaptureX11::list_windows();
 #elif defined(LANCAST_PLATFORM_MACOS)
     auto windows = ScreenCaptureMac::list_windows();
+#elif defined(LANCAST_PLATFORM_WINDOWS)
+    auto windows = ScreenCaptureDXGI::list_windows();
 #else
     std::vector<WindowInfo> windows;
 #endif
@@ -89,12 +95,20 @@ static void list_windows_and_exit() {
         printf("%-12s %-10s %s\n", "Window ID", "Size", "Title");
         printf("%-12s %-10s %s\n", "---------", "----", "-----");
         for (const auto& w : windows) {
-            printf("0x%-10lx %ux%-7u %s\n", w.id, w.width, w.height, w.title.c_str());
+            printf("0x%-10" PRIx64 " %ux%-7u %s\n", w.id, w.width, w.height, w.title.c_str());
         }
     }
 }
 
 int main(int argc, char* argv[]) {
+#ifdef LANCAST_PLATFORM_WINDOWS
+    WinsockInit winsock;
+    if (!winsock.ok()) {
+        fprintf(stderr, "Failed to initialize Winsock\n");
+        return 1;
+    }
+#endif
+
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
@@ -106,7 +120,7 @@ int main(int argc, char* argv[]) {
     uint32_t bitrate = 6000000;
     uint32_t width = 0;   // 0 = auto (capture full screen)
     uint32_t height = 0;
-    unsigned long window_id = 0;
+    uint64_t window_id = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--host") == 0) {
@@ -125,7 +139,7 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
-            window_id = strtoul(argv[++i], nullptr, 0);
+            window_id = strtoull(argv[++i], nullptr, 0);
         } else if (strcmp(argv[i], "--list-windows") == 0) {
             do_list_windows = true;
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {

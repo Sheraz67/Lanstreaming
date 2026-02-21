@@ -1,6 +1,7 @@
 #include "capture/screen_capture_x11.h"
 #include "core/logger.h"
 
+#include <cinttypes>
 #include <X11/Xatom.h>
 
 extern "C" {
@@ -101,7 +102,7 @@ ScreenCaptureX11::~ScreenCaptureX11() {
 }
 
 bool ScreenCaptureX11::init(uint32_t target_width, uint32_t target_height,
-                             unsigned long window_id) {
+                             uint64_t window_id) {
     // Open X display
     display_ = XOpenDisplay(nullptr);
     if (!display_) {
@@ -121,14 +122,14 @@ bool ScreenCaptureX11::init(uint32_t target_width, uint32_t target_height,
         // Validate the window exists
         XWindowAttributes attrs;
         if (!XGetWindowAttributes(display_, target_window_, &attrs)) {
-            LOG_ERROR(TAG, "Invalid window ID: 0x%lx", window_id);
+            LOG_ERROR(TAG, "Invalid window ID: 0x%" PRIx64, window_id);
             XCloseDisplay(display_);
             display_ = nullptr;
             return false;
         }
         screen_width_ = static_cast<uint32_t>(attrs.width);
         screen_height_ = static_cast<uint32_t>(attrs.height);
-        LOG_INFO(TAG, "Capturing window 0x%lx (%ux%u)", window_id,
+        LOG_INFO(TAG, "Capturing window 0x%" PRIx64 " (%ux%u)", window_id,
                  screen_width_, screen_height_);
     } else {
         target_window_ = root_;

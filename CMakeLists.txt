@@ -56,6 +56,9 @@ add_library(lancast_net STATIC
 )
 target_include_directories(lancast_net PUBLIC src)
 target_link_libraries(lancast_net PUBLIC lancast_core)
+if(LANCAST_PLATFORM_WINDOWS)
+    target_link_libraries(lancast_net PUBLIC ws2_32)
+endif()
 
 # --- Capture library (platform-specific) ---
 if(LANCAST_PLATFORM_LINUX)
@@ -104,6 +107,32 @@ elseif(LANCAST_PLATFORM_MACOS)
     target_link_libraries(lancast_audio_capture PUBLIC
         lancast_core
         lancast_capture
+    )
+elseif(LANCAST_PLATFORM_WINDOWS)
+    add_library(lancast_capture STATIC
+        src/capture/screen_capture_dxgi.cpp
+    )
+    target_include_directories(lancast_capture PUBLIC src)
+    target_link_libraries(lancast_capture PUBLIC
+        lancast_core
+        FFmpeg::swscale
+        FFmpeg::avutil
+        d3d11
+        dxgi
+        dwmapi
+    )
+
+    add_library(lancast_audio_capture STATIC
+        src/capture/audio_capture_wasapi.cpp
+        src/capture/mic_capture_wasapi.cpp
+    )
+    target_include_directories(lancast_audio_capture PUBLIC src)
+    target_link_libraries(lancast_audio_capture PUBLIC
+        lancast_core
+        FFmpeg::swresample
+        FFmpeg::avutil
+        ole32
+        uuid
     )
 endif()
 

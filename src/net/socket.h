@@ -4,8 +4,19 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include <sys/socket.h>
-#include <netinet/in.h>
+
+#ifdef _WIN32
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
+   using ssize_t = int;
+   using socket_t = SOCKET;
+   static constexpr socket_t INVALID_SOCK = INVALID_SOCKET;
+#else
+#  include <sys/socket.h>
+#  include <netinet/in.h>
+   using socket_t = int;
+   static constexpr socket_t INVALID_SOCK = -1;
+#endif
 
 namespace lancast {
 
@@ -46,11 +57,11 @@ public:
     // Set receive timeout in milliseconds
     bool set_recv_timeout(int ms);
 
-    int fd() const { return fd_; }
-    bool is_valid() const { return fd_ >= 0; }
+    socket_t fd() const { return fd_; }
+    bool is_valid() const { return fd_ != INVALID_SOCK; }
 
 private:
-    int fd_ = -1;
+    socket_t fd_ = INVALID_SOCK;
 };
 
 } // namespace lancast
