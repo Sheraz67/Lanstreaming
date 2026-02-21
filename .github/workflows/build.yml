@@ -213,7 +213,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install FFmpeg via vcpkg
-        run: vcpkg install ffmpeg[avcodec,avformat,avutil,swscale,swresample]:x64-windows
+        run: vcpkg install ffmpeg[avcodec,avformat,swscale,swresample]:x64-windows
 
       - name: Configure
         run: cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
