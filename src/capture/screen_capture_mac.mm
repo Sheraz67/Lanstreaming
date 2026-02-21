@@ -2,15 +2,25 @@
 #include "core/logger.h"
 #include "core/clock.h"
 
-#import <ScreenCaptureKit/ScreenCaptureKit.h>
-#import <CoreMedia/CoreMedia.h>
-#import <CoreVideo/CoreVideo.h>
-
+// FFmpeg headers must come before ScreenCaptureKit to avoid AVMediaType
+// name collision (macOS AVFoundation defines AVMediaType as NSString*,
+// FFmpeg defines it as an enum).
 extern "C" {
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/pixfmt.h>
 }
+
+// Now include Objective-C frameworks — AVFoundation's AVMediaType typedef
+// will see the FFmpeg enum already defined and we use the workaround below.
+#ifdef __OBJC__
+// Prevent AVFoundation AVMediaType typedef from conflicting with FFmpeg's enum
+#define AVMediaType AVMediaType_ObjC
+#import <ScreenCaptureKit/ScreenCaptureKit.h>
+#import <CoreMedia/CoreMedia.h>
+#import <CoreVideo/CoreVideo.h>
+#undef AVMediaType
+#endif
 
 namespace lancast {
 
