@@ -179,6 +179,30 @@ target_link_libraries(lancast_app PUBLIC lancast_net lancast_capture lancast_aud
 add_executable(lancast src/main.cpp)
 target_link_libraries(lancast PRIVATE lancast_app)
 
+# --- Copy runtime DLLs on Windows ---
+if(LANCAST_PLATFORM_WINDOWS)
+    set(_dll_search_dirs "")
+    if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+        list(APPEND _dll_search_dirs "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
+    endif()
+    if(DEFINED ENV{FFMPEG_ROOT})
+        list(APPEND _dll_search_dirs "$ENV{FFMPEG_ROOT}/bin")
+    endif()
+
+    set(_runtime_dlls "")
+    foreach(_dir IN LISTS _dll_search_dirs)
+        file(GLOB _dlls "${_dir}/*.dll")
+        list(APPEND _runtime_dlls ${_dlls})
+    endforeach()
+
+    if(_runtime_dlls)
+        add_custom_command(TARGET lancast POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_runtime_dlls} $<TARGET_FILE_DIR:lancast>
+            COMMENT "Copying runtime DLLs to output directory"
+        )
+    endif()
+endif()
+
 # --- Install rules ---
 install(TARGETS lancast DESTINATION bin)
 
