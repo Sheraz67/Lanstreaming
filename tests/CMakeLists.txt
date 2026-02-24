@@ -19,10 +19,16 @@ function(lancast_add_test name)
     add_executable(${name} ${name}.cpp)
     target_link_libraries(${name} PRIVATE ${ARGN} GTest::gtest_main)
     add_test(NAME ${name} COMMAND ${name})
-    if(LANCAST_PLATFORM_WINDOWS AND _test_runtime_dlls)
+    if(LANCAST_PLATFORM_WINDOWS)
+        if(_test_runtime_dlls)
+            add_custom_command(TARGET ${name} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_test_runtime_dlls} $<TARGET_FILE_DIR:${name}>
+                COMMENT "Copying runtime DLLs for ${name}"
+            )
+        endif()
         add_custom_command(TARGET ${name} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_test_runtime_dlls} $<TARGET_FILE_DIR:${name}>
-            COMMENT "Copying runtime DLLs for ${name}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3::SDL3-shared> $<TARGET_FILE_DIR:${name}>
+            COMMENT "Copying SDL3.dll for ${name}"
         )
     endif()
 endfunction()

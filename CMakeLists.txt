@@ -201,6 +201,12 @@ if(LANCAST_PLATFORM_WINDOWS)
             COMMENT "Copying runtime DLLs to output directory"
         )
     endif()
+
+    # Copy SDL3.dll next to executable (built via FetchContent as shared lib)
+    add_custom_command(TARGET lancast POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3::SDL3-shared> $<TARGET_FILE_DIR:lancast>
+        COMMENT "Copying SDL3.dll to output directory"
+    )
 endif()
 
 # --- Install rules ---
